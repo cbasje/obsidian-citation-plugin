@@ -9,6 +9,7 @@ import {
 
 import CitationPlugin from './main';
 import { IIndexable, DatabaseType, TEMPLATE_VARIABLES } from './types';
+import { CSL_STYLES, CslStyleId } from './csl/assets';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
   'csl-json': 'CSL-JSON',
@@ -26,17 +27,14 @@ export class CitationsPluginSettings {
     'title: {{title}}\n' +
     'authors: {{authorString}}\n' +
     'year: {{year}}\n' +
-    '---\n\n';
+    '---\n';
 
   markdownCitationTemplate = '[@{{citekey}}]';
   alternativeMarkdownCitationTemplate = '@{{citekey}}';
 
-  referencesSectionHeading = '# References';
-  referencesTemplate: string =
-    '{{ apaAuthors entry.author }} ({{ year }}). {{ title }}' +
-    '{{#if containerTitle}}, *{{ containerTitle }}*{{/if}}' +
-    '{{#if page}}, {{ page }}{{/if}}. ' +
-    '{{#if DOI}}https://doi.org/{{ DOI }}{{else if URL}}{{ URL }}{{/if}}\n';
+  cslStyle: CslStyleId = 'apa';
+  customCslStylePath = '';
+  renderInlineCitations = true;
 }
 
 export class CitationSettingTab extends PluginSettingTab {
@@ -246,28 +244,58 @@ export class CitationSettingTab extends PluginSettingTab {
         this.buildValueInput(input, 'alternativeMarkdownCitationTemplate'),
       );
 
-    containerEl.createEl('h3', { text: 'References section' });
+    containerEl.createEl('h3', { text: 'References (CSL)' });
     containerEl.createEl('p', {
       text:
-        'The "Insert/update references section" command scans the current ' +
-        'note for Pandoc-style citations and renders a references section ' +
-        'using the template below (applied once per cited reference). The ' +
-        'section is inserted at the end of the note, or replaced in place ' +
-        'if a section with the configured heading already exists. The ' +
-        'Handlebars helper {{ apaAuthors entry.author }} formats authors ' +
-        'in APA 7 style.',
+        'Bibliographies are rendered with citeproc-js using the CSL style ' +
+        'selected below. Use a fenced `references` code block in a note to ' +
+        'render the reference list — leave it empty to auto-scan the note ' +
+        'for Pandoc-style citations (`[@citekey]`), or list citekeys one per ' +
+        'line.',
     });
 
+    const styleOptions: Record<string, string> = {};
+    CSL_STYLES.forEach((s) => (styleOptions[s.id] = s.label));
+
     new Setting(containerEl)
-      .setName('References section heading')
-      .addText((input) =>
-        this.buildValueInput(input, 'referencesSectionHeading'),
+      .setName('CSL style')
+      .setDesc('Citation style used for bibliography rendering.')
+      .addDropdown((component) =>
+        this.buildValueInput(
+          component.addOptions(styleOptions),
+          'cslStyle',
+          (value) => {
+            this.plugin.loadCiteprocEngine();
+          },
+        ),
       );
 
     new Setting(containerEl)
-      .setName('References entry template')
-      .addTextArea((input) =>
-        this.buildValueInput(input, 'referencesTemplate'),
+      .setName('Custom CSL style path')
+      .setDesc(
+        'Optional path (relative to vault root) to a custom .csl file. ' +
+        'Overrides the style dropdown when set.',
+      )
+      .addText((input) =>
+        this.buildValueInput(input, 'customCslStylePath', () => {
+          this.plugin.loadCiteprocEngine();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName('Render inline citations')
+      .setDesc(
+        'In reading view, replace Pandoc-style [@citekey] markers in the ' +
+        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
+        'The source text is unchanged.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.renderInlineCitations)
+          .onChange(async (value) => {
+            this.plugin.settings.renderInlineCitations = value;
+            await this.plugin.saveSettings();
+          }),
       );
   }
 

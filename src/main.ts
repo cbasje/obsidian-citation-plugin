@@ -14,8 +14,6 @@ import {
   compile as compileTemplate,
   TemplateDelegate as Template,
 } from 'handlebars';
-import * as Handlebars from 'handlebars';
-import { Author } from './types';
 import CitationEvents from './events';
 import {
   InsertCitationModal,
@@ -39,31 +37,18 @@ import {
   WorkerManager,
   WorkerManagerBlocked,
 } from './util';
+import { CslItemRegistry } from './csl/registry';
+import { CiteprocEngine } from './csl/engine';
+import { BUNDLED_LOCALE_EN_US, CslStyleId } from './csl/assets';
 import LoadWorker from 'web-worker:./worker';
-
-// Format a list of authors in APA 7 style, e.g. "Last, F. M., & Last, F. M."
-Handlebars.registerHelper('apaAuthors', (authors: Author[]): string => {
-  if (!authors || authors.length === 0) return '';
-  const formatInitials = (given?: string): string =>
-    (given ?? '')
-      .split(/[\s.-]+/)
-      .filter(Boolean)
-      .map((part) => part[0] + '.')
-      .join(' ');
-  const formatOne = (a: Author): string => {
-    if (!a.family) return a.given ?? '';
-    return a.given ? `${a.family}, ${formatInitials(a.given)}` : a.family;
-  };
-  const formatted = authors.map(formatOne);
-  if (formatted.length === 1) return formatted[0];
-  if (formatted.length === 2) return `${formatted[0]}, & ${formatted[1]}`;
-  return `${formatted.slice(0, -1).join(', ')}, & ${formatted[formatted.length - 1]
-    }`;
-});
+import type { CitationItem } from 'citeproc';
 
 export default class CitationPlugin extends Plugin {
   settings: CitationsPluginSettings;
   library: Library;
+
+  cslRegistry: CslItemRegistry;
+  citeproc: CiteprocEngine;
 
   // Template compilation options
   private templateSettings = {
@@ -105,8 +90,9 @@ export default class CitationPlugin extends Plugin {
       'literatureNoteContentTemplate',
       'markdownCitationTemplate',
       'alternativeMarkdownCitationTemplate',
-      'referencesSectionHeading',
-      'referencesTemplate',
+      'cslStyle',
+      'customCslStylePath',
+      'renderInlineCitations',
     ];
     toLoad.forEach((setting) => {
       if (setting in loadedSettings) {
@@ -124,6 +110,10 @@ export default class CitationPlugin extends Plugin {
   }
 
   async init(): Promise<void> {
+    // Initialise CSL registry / engine.
+    this.cslRegistry = new CslItemRegistry();
+    this.citeproc = new CiteprocEngine(this.cslRegistry);
+
     if (this.settings.citationExportPath) {
       // Load library for the first time
       this.loadLibrary();
@@ -203,11 +193,32 @@ export default class CitationPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: 'insert-references-section',
-      name: 'Insert/update references section',
+      id: 'insert-references-block',
+      name: 'Insert references code block',
       callback: () => {
-        this.insertReferencesSection();
+        this.insertReferencesBlock();
       },
+    });
+
+    // Render bibliographies dynamically in reading view / live preview.
+    this.registerMarkdownCodeBlockProcessor(
+      'references',
+      async (source, el, ctx) => {
+        await this.renderReferencesBlock(source, el, ctx);
+      },
+    );
+
+    // Replace [@citekey] markers in note text with formatted in-text
+    // citations in reading view.
+    this.registerMarkdownPostProcessor((el, _ctx) => {
+      if (!this.settings.renderInlineCitations) return;
+      if (
+        !this.citeproc ||
+        !this.citeproc.isReady ||
+        this.cslRegistry.size === 0
+      )
+        return;
+      this.renderInlineCitationsInElement(el);
     });
 
     this.addSettingTab(new CitationSettingTab(this.app, this));
@@ -275,6 +286,11 @@ export default class CitationPlugin extends Plugin {
             `Citation plugin: successfully loaded library with ${this.library.size} entries.`,
           );
 
+          // Feed raw entries into the CSL registry and (re)build the
+          // citeproc engine so bibliography rendering reflects the new data.
+          this.cslRegistry.load(entries, this.settings.citationExportFormat);
+          this.loadCiteprocEngine();
+
           this.events.trigger('library-load-complete');
 
           return this.library;
@@ -329,13 +345,6 @@ export default class CitationPlugin extends Plugin {
   get alternativeMarkdownCitationTemplate(): Template {
     return compileTemplate(
       this.settings.alternativeMarkdownCitationTemplate,
-      this.templateSettings,
-    );
-  }
-
-  get referencesTemplate(): Template {
-    return compileTemplate(
-      this.settings.referencesTemplate,
       this.templateSettings,
     );
   }
@@ -456,74 +465,262 @@ export default class CitationPlugin extends Plugin {
   }
 
   /**
-   * Scan the current note for Pandoc-style citations (`[@citekey]`, `@citekey`,
-   * or `[-@citekey]`), render each matched reference using the configured
-   * `referencesTemplate`, and insert (or replace) a references section marked
-   * by `referencesSectionHeading`.
+   * (Re)build the citeproc engine with the currently selected CSL style and
+   * locale. Called on library load and whenever the style setting changes.
    */
-  async insertReferencesSection(): Promise<void> {
+  async loadCiteprocEngine(): Promise<void> {
+    if (!this.citeproc || !this.cslRegistry) return;
+
+    const styleId = this.settings.cslStyle as CslStyleId;
+    let customXml: string | undefined;
+
+    if (this.settings.customCslStylePath) {
+      try {
+        const resolved = this.resolveLibraryPath(
+          this.settings.customCslStylePath,
+        );
+        const buffer = await FileSystemAdapter.readLocalFile(resolved);
+        const dataView = new DataView(buffer);
+        customXml = new TextDecoder('utf8').decode(dataView);
+      } catch (err) {
+        console.warn(
+          'Citation plugin: could not load custom CSL style, falling back to bundled style.',
+          err,
+        );
+      }
+    }
+
+    this.citeproc.setLocale(BUNDLED_LOCALE_EN_US);
+    this.citeproc.configure(styleId, customXml);
+  }
+
+  /**
+   * Insert an empty `references` fenced code block at the cursor. In reading
+   * view it will auto-scan the note for Pandoc-style citations.
+   */
+  insertReferencesBlock(): void {
     const editor = this.editor;
     if (!editor) {
-      new Notice('Open a Markdown note before inserting a references section.');
+      new Notice('Open a Markdown note before inserting a references block.');
       return;
     }
-    if (!this.library) {
-      new Notice('Citation library is not loaded.');
+    editor.replaceRange('```references\n```', editor.getCursor());
+  }
+
+  /**
+   * Render a `references` code block as a styled bibliography using
+   * citeproc-js. The block contents may be empty (auto-scan the surrounding
+   * note for `[@citekey]` markers) or list citekeys one per line.
+   */
+  async renderReferencesBlock(
+    source: string,
+    el: HTMLElement,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ctx: any,
+  ): Promise<void> {
+    if (
+      !this.citeproc ||
+      !this.citeproc.isReady ||
+      this.cslRegistry.size === 0
+    ) {
+      el.createEl('p', {
+        text: 'Citation library is not loaded.',
+        cls: 'csl-placeholder',
+      });
       return;
     }
 
-    const text = editor.getValue();
-    const citationPattern = /\[-?@([^\]\s]+)\]|\[-?@([^\]\s]+)\]|@([A-Za-z0-9_:-]+)/g;
-    const seen = new Set<string>();
-    let match: RegExpExecArray;
-    while ((match = citationPattern.exec(text)) !== null) {
-      const key = match[1] || match[2] || match[3];
-      if (key) seen.add(key);
+    // Parse explicit citekeys from the block (one per line, ignoring blanks
+    // and comments).
+    let citekeys = source
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#') && !l.startsWith('<!--'));
+
+    // If the block is empty or starts with "auto", scan the note text.
+    if (citekeys.length === 0 || citekeys[0].toLowerCase() === 'auto') {
+      const noteFile = this.app.vault.getAbstractFileByPath(
+        ctx.sourcePath,
+      ) as TFile;
+      if (noteFile) {
+        const text = await this.app.vault.read(noteFile);
+        citekeys = extractCitekeys(text);
+      }
     }
 
-    if (seen.size === 0) {
-      new Notice('No citations found in the current note.');
+    const valid = citekeys.filter((k) => this.cslRegistry.has(k));
+    if (valid.length === 0) {
+      el.createEl('p', {
+        text: 'No citations found.',
+        cls: 'csl-placeholder',
+      });
       return;
     }
 
-    const entries = Array.from(seen)
-      .map((k) => this.library.entries[k])
-      .filter(Boolean);
+    const entries = this.citeproc.renderBibliography(valid);
     if (entries.length === 0) {
-      new Notice('None of the cited citekeys were found in the library.');
+      el.createEl('p', {
+        text: 'No bibliography entries could be rendered.',
+        cls: 'csl-placeholder',
+      });
       return;
     }
 
-    const rendered = entries
-      .map((e) =>
-        this.referencesTemplate(
-          this.library.getTemplateVariablesForCitekey(e.id),
-        ),
-      )
-      .join('\n');
-
-    const heading = this.settings.referencesSectionHeading || '## References';
-    const section = `${heading}\n\n${rendered}`;
-
-    // Replace an existing section starting with the heading, otherwise append.
-    const lines = text.split('\n');
-    const headingLineIndex = lines.findIndex(
-      (l) => l.trim() === heading.trim(),
-    );
-    if (headingLineIndex >= 0) {
-      // Replace from the heading to the end of the document.
-      const from = { line: headingLineIndex, ch: 0 };
-      const to = {
-        line: editor.lastLine(),
-        ch: editor.getLine(editor.lastLine()).length,
-      };
-      editor.replaceRange(section, from, to);
-    } else {
-      // Append at the end of the document.
-      const lastLine = editor.lastLine();
-      const end = { line: lastLine, ch: editor.getLine(lastLine).length };
-      const prefix = editor.getLine(lastLine).trim() === '' ? '\n' : '\n\n';
-      editor.replaceRange(`${prefix}${section}`, end);
+    // Render citeproc HTML output safely: build it in a detached container
+    // and move the child nodes into the plugin's element. This avoids setting
+    // innerHTML directly on a live DOM node (recommended by the Obsidian plugin
+    // review guidelines).
+    const container = document.createElement('div');
+    container.innerHTML = `<div class="csl-bibliography">${entries.join(
+      '',
+    )}</div>`;
+    while (container.firstChild) {
+      el.appendChild(container.firstChild);
     }
   }
+
+  /**
+   * Walk all text nodes in `el` and replace Pandoc-style `[@citekey]` markers
+   * with citeproc-rendered in-text citations. Text inside `<code>` and
+   * `<pre>` elements is skipped.
+   */
+  renderInlineCitationsInElement(el: HTMLElement): void {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode(node: Text): number {
+        if (!node.nodeValue || !node.nodeValue.includes('[@')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        // Skip inline code and code blocks.
+        let parent: Element | null = node.parentElement;
+        while (parent && parent !== el) {
+          if (parent.tagName === 'CODE' || parent.tagName === 'PRE') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          parent = parent.parentElement;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    const textNodes: Text[] = [];
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      textNodes.push(node as Text);
+    }
+
+    for (const textNode of textNodes) {
+      this.replaceCitationsInTextNode(textNode);
+    }
+  }
+
+  /**
+   * Replace `[@citekey]` markers in a single text node with rendered
+   * citation spans. If no valid citations are found the text is left
+   * untouched.
+   */
+  private replaceCitationsInTextNode(textNode: Text): void {
+    const text = textNode.nodeValue;
+    if (!text) return;
+
+    // Match bracketed Pandoc citations: [@citekey], [-@citekey],
+    // [@citekey, p. 5], [@a; @b], etc.
+    const pattern = /\[(-?@[^\]]+)\]/g;
+    const matches = Array.from(text.matchAll(pattern));
+    if (matches.length === 0) return;
+
+    const parent = textNode.parentNode;
+    if (!parent) return;
+
+    let lastIndex = 0;
+    for (const match of matches) {
+      const matchStart = match.index!;
+      const matchEnd = matchStart + match[0].length;
+
+      // Text before the citation.
+      if (matchStart > lastIndex) {
+        parent.insertBefore(
+          document.createTextNode(text.substring(lastIndex, matchStart)),
+          textNode,
+        );
+      }
+
+      const items = parseCitationGroup(match[1]);
+      if (items && items.length > 0) {
+        const html = this.citeproc.renderInlineCitation(items);
+        if (html) {
+          const span = document.createElement('span');
+          span.className = 'csl-inline';
+          const temp = document.createElement('span');
+          temp.innerHTML = html;
+          while (temp.firstChild) {
+            span.appendChild(temp.firstChild);
+          }
+          parent.insertBefore(span, textNode);
+        } else {
+          // Rendering failed — keep the original marker.
+          parent.insertBefore(document.createTextNode(match[0]), textNode);
+        }
+      } else {
+        // Not a valid citation — keep the original text.
+        parent.insertBefore(document.createTextNode(match[0]), textNode);
+      }
+
+      lastIndex = matchEnd;
+    }
+
+    // Remaining text after the last citation.
+    if (lastIndex < text.length) {
+      parent.insertBefore(
+        document.createTextNode(text.substring(lastIndex)),
+        textNode,
+      );
+    }
+
+    parent.removeChild(textNode);
+  }
+}
+
+/**
+ * Extract Pandoc-style citekeys (`[@citekey]`, `@citekey`, `[-@citekey]`)
+ * from a block of text, preserving order of first appearance.
+ */
+function extractCitekeys(text: string): string[] {
+  const pattern = /\[-?@([^\]\s]+)\]|@([A-Za-z0-9_:-]+)/g;
+  const seen = new Set<string>();
+  let match: RegExpExecArray;
+  while ((match = pattern.exec(text)) !== null) {
+    const key = match[1] || match[2];
+    if (key) seen.add(key);
+  }
+  return Array.from(seen);
+}
+
+/**
+ * Parse the contents of a bracketed Pandoc citation (the text inside `[@...]`)
+ * into an array of citeproc `CitationItem`s.
+ *
+ * Examples:
+ *   "@smith2020"                         → [{id:"smith2020"}]
+ *   "-@smith2020"                        → [{id:"smith2020","suppress-author":true}]
+ *   "@smith2020, p. 5"                   → [{id:"smith2020",locator:"p. 5"}]
+ *   "@smith2020; @jones2019"             → [{id:"smith2020"},{id:"jones2019"}]
+ *
+ * Returns `null` if the content does not parse as a valid citation group.
+ */
+function parseCitationGroup(content: string): CitationItem[] | null {
+  const parts = content.split(';').map((s) => s.trim());
+  const items: CitationItem[] = [];
+
+  for (const part of parts) {
+    const m = part.match(/^(-?)@([^\s,]+)(?:\s*,\s*(.+))?$/);
+    if (!m) return null;
+
+    const [, suppress, citekey, locator] = m;
+    const item: CitationItem = { id: citekey };
+    if (suppress) item['suppress-author'] = true;
+    if (locator) item.locator = locator.trim();
+    items.push(item);
+  }
+
+  return items.length > 0 ? items : null;
 }

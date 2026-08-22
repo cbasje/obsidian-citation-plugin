@@ -49,6 +49,7 @@
   "dependencies": {
     "@retorquere/bibtex-parser": "^3.2.30",
     "chokidar": "^3.5.0",
+    "citeproc": "^2.4.63",
     "handlebars": "^4.7.6",
     "open": "^7.3.0",
     "promise-worker": "^2.0.1"
@@ -67,7 +68,8 @@
       "d.ts"
     ],
     "transform": {
-      "^.+\\.ts$": "ts-jest"
+      "^.+\\.ts$": "ts-jest",
+      "^.+\\.(csl|xml)$": "<rootDir>/jest-raw-transformer.js"
     }
   }
 }

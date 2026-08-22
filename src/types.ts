@@ -117,6 +117,9 @@ export function loadEntries(
 export interface Author {
   given?: string;
   family?: string;
+  literal?: string;
+  suffix?: string;
+  'non-dropping-particle'?: string;
 }
 
 /**
@@ -230,16 +233,27 @@ export interface EntryDataCSL {
   abstract?: string;
   author?: Author[];
   'container-title'?: string;
+  'container-title-short'?: string;
+  'collection-title'?: string;
   DOI?: string;
   'event-place'?: string;
+  edition?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   issued?: { 'date-parts': [any[]] };
+  ISBN?: string;
+  ISSN?: string;
+  issue?: string;
+  keyword?: string;
+  language?: string;
   page?: string;
   publisher?: string;
   'publisher-place'?: string;
-  title?: string;
   'title-short'?: string;
+  title?: string;
   URL?: string;
+  volume?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
 }
 
 export class EntryCSLAdapter extends Entry {

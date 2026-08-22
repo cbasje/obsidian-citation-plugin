@@ -4,6 +4,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import replace from '@rollup/plugin-replace';
 import webWorkerLoader from 'rollup-plugin-web-worker-loader';
+import { readFileSync } from 'fs';
 
 export default {
   input: 'src/main.ts',
@@ -33,6 +34,17 @@ export default {
     nodeResolve({ browser: true }),
     commonjs({ ignore: ['original-fs'] }),
     json(),
+    {
+      // Inline raw string imports for bundled CSL style (.csl) and locale
+      // (.xml) files.
+      name: 'raw-asset',
+      load(id) {
+        if (id.endsWith('.csl') || id.endsWith('.xml')) {
+          return `export default ${JSON.stringify(readFileSync(id, 'utf-8'))};`;
+        }
+        return null;
+      },
+    },
     webWorkerLoader({
       targetPlatform: 'browser',
       extensions: ['.ts'],
