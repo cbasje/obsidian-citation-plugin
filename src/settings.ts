@@ -27,6 +27,7 @@ export class CitationsPluginSettings {
     'title: {{title}}\n' +
     'authors: {{authorString}}\n' +
     'year: {{year}}\n' +
+    '{{#if files}}file: "{{files.[0]}}"{{/if}}\n' +
     '---\n\n';
 
   cslStyle: CslStyleId = 'apa';

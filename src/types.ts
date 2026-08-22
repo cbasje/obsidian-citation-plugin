@@ -22,6 +22,8 @@ export const TEMPLATE_VARIABLES = {
   eprint: '',
   eprinttype: '',
   eventPlace: 'Location of event',
+  files:
+    'List of associated file paths (e.g. PDFs) from the reference database',
   note: '',
   page: 'Page or page range',
   publisher: '',
@@ -167,12 +169,15 @@ function getBibLaTeXMetadata(
         .join('\n\n')
     : undefined;
 
-  // Files
+  // Files — parse Better BibTeX file entries into usable links
   let files: string[] = [];
   if (fields.file)
     files = files.concat(fields.file.flatMap((x) => x.split(';')));
   if (fields.files)
     files = files.concat(fields.files.flatMap((x) => x.split(';')));
+  files = files
+    .map((f) => parseFileEntry(f))
+    .filter(Boolean) as string[];
 
   // Author (Author[] for templates)
   const author: Author[] | undefined = authorCreators?.map((a) => ({
@@ -209,6 +214,73 @@ function getBibLaTeXMetadata(
 function parseYear(raw: string): string | undefined {
   const m = raw.match(/(-?\d{4})/);
   return m ? m[1] : undefined;
+}
+
+/**
+ * Parse a single file entry from a BibLaTeX `file` field and return the best
+ * usable link (a URL or a `file://` path).
+ *
+ * Better BibTeX encodes file attachments as colon-separated fields with
+ * `\:` escaping literal colons:
+ *
+ *   description:filename:type:url
+ */
+function parseFileEntry(raw: string): string | undefined {
+  const s = raw.trim();
+  if (!s) return undefined;
+
+  // Split by unescaped colons (\: is a literal colon within a field)
+  const PLACEHOLDER = '\u0000';
+  const parts = s
+    .replace(/\\:/g, PLACEHOLDER)
+    .split(':')
+    .map((p) => p.replace(new RegExp(PLACEHOLDER, 'g'), ':'));
+
+  const FILE_TYPE = /^(pdf|epub|txt|html?|docx?|rtf|odt|tex|dvi|ps)$/i;
+
+  let pathPart: string | undefined;
+  let url: string | undefined;
+
+  if (parts.length >= 4) {
+    // description:filename:type:url
+    pathPart = parts[1].trim();
+    url = parts[3].trim();
+  } else if (parts.length === 3) {
+    // description:filename:type  (description may be empty for old format)
+    pathPart = parts[1].trim();
+  } else if (parts.length === 2) {
+    // path:type  (no description field)
+    if (FILE_TYPE.test(parts[1].trim())) {
+      pathPart = parts[0].trim();
+    } else {
+      // description:path  (no type)
+      pathPart = parts[1].trim();
+    }
+  } else {
+    // plain path
+    pathPart = parts[0].trim();
+  }
+
+  // Resolve relative paths against the .bib file directory.
+  // Only treat the filename as a local path if it's absolute or contains a
+  // directory separator — a bare filename like "paper.pdf" is not usable as
+  // a local link, so fall through to the URL.
+  if (pathPart) {
+    const isAbsolute =
+      pathPart.startsWith('/') || /^[A-Za-z]:[\\/]/.test(pathPart);
+    if (isAbsolute) {
+      return 'file://' + pathPart;
+    }
+    // File is local
+    if (pathPart.includes('/')) {
+      return `[[${pathPart}]]`;
+    }
+  }
+
+  // Fall back to URL
+  if (url) return url;
+
+  return undefined;
 }
 
 export class Library {
