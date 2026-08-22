@@ -15,22 +15,9 @@ import {
   TemplateDelegate as Template,
 } from 'handlebars';
 import CitationEvents from './events';
-import {
-  InsertCitationModal,
-  InsertNoteLinkModal,
-  InsertNoteContentModal,
-  OpenNoteModal,
-} from './modals';
-import { VaultExt } from './obsidian-extensions.d';
+import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
-import {
-  Entry,
-  EntryData,
-  EntryBibLaTeXAdapter,
-  EntryCSLAdapter,
-  IIndexable,
-  Library,
-} from './types';
+import { EntryData, IIndexable, Library } from './types';
 import {
   DISALLOWED_FILENAME_CHARACTERS_RE,
   Notifier,
@@ -88,8 +75,6 @@ export default class CitationPlugin extends Plugin {
       'literatureNoteTitleTemplate',
       'literatureNoteFolder',
       'literatureNoteContentTemplate',
-      'markdownCitationTemplate',
-      'alternativeMarkdownCitationTemplate',
       'cslStyle',
       'customCslStylePath',
       'renderInlineCitations',
@@ -161,25 +146,6 @@ export default class CitationPlugin extends Plugin {
       hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'r' }],
       callback: () => {
         this.loadLibrary();
-      },
-    });
-
-    this.addCommand({
-      id: 'insert-citation',
-      name: 'Insert literature note link',
-      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'e' }],
-      callback: () => {
-        const modal = new InsertNoteLinkModal(this.app, this);
-        modal.open();
-      },
-    });
-
-    this.addCommand({
-      id: 'insert-literature-note-content',
-      name: 'Insert literature note content in the current pane',
-      callback: () => {
-        const modal = new InsertNoteContentModal(this.app, this);
-        modal.open();
       },
     });
 
@@ -263,24 +229,9 @@ export default class CitationPlugin extends Plugin {
           });
         })
         .then((entries: EntryData[]) => {
-          let adapter: new (data: EntryData) => Entry;
-          let idKey: string;
-
-          switch (this.settings.citationExportFormat) {
-            case 'biblatex':
-              adapter = EntryBibLaTeXAdapter;
-              idKey = 'key';
-              break;
-            case 'csl-json':
-              adapter = EntryCSLAdapter;
-              idKey = 'id';
-              break;
-          }
-
           this.library = new Library(
-            Object.fromEntries(
-              entries.map((e) => [(e as IIndexable)[idKey], new adapter(e)]),
-            ),
+            entries,
+            this.settings.citationExportFormat,
           );
           console.debug(
             `Citation plugin: successfully loaded library with ${this.library.size} entries.`,
@@ -335,20 +286,6 @@ export default class CitationPlugin extends Plugin {
     );
   }
 
-  get markdownCitationTemplate(): Template {
-    return compileTemplate(
-      this.settings.markdownCitationTemplate,
-      this.templateSettings,
-    );
-  }
-
-  get alternativeMarkdownCitationTemplate(): Template {
-    return compileTemplate(
-      this.settings.alternativeMarkdownCitationTemplate,
-      this.templateSettings,
-    );
-  }
-
   getTitleForCitekey(citekey: string): string {
     const unsafeTitle = this.literatureNoteTitleTemplate(
       this.library.getTemplateVariablesForCitekey(citekey),
@@ -369,15 +306,7 @@ export default class CitationPlugin extends Plugin {
   }
 
   getMarkdownCitationForCitekey(citekey: string): string {
-    return this.markdownCitationTemplate(
-      this.library.getTemplateVariablesForCitekey(citekey),
-    );
-  }
-
-  getAlternativeMarkdownCitationForCitekey(citekey: string): string {
-    return this.alternativeMarkdownCitationTemplate(
-      this.library.getTemplateVariablesForCitekey(citekey),
-    );
+    return `[@${citekey}]`;
   }
 
   /**
@@ -420,47 +349,8 @@ export default class CitationPlugin extends Plugin {
       .catch(console.error);
   }
 
-  async insertLiteratureNoteLink(citekey: string): Promise<void> {
-    this.getOrCreateLiteratureNoteFile(citekey)
-      .then((file: TFile) => {
-        const useMarkdown: boolean = (<VaultExt>this.app.vault).getConfig(
-          'useMarkdownLinks',
-        );
-        const title = this.getTitleForCitekey(citekey);
-
-        let linkText: string;
-        if (useMarkdown) {
-          const uri = encodeURI(
-            this.app.metadataCache.fileToLinktext(file, '', false),
-          );
-          linkText = `[${title}](${uri})`;
-        } else {
-          linkText = `[[${title}]]`;
-        }
-
-        this.editor.replaceSelection(linkText);
-      })
-      .catch(console.error);
-  }
-
-  /**
-   * Format literature note content for a given reference and insert in the
-   * currently active pane.
-   */
-  async insertLiteratureNoteContent(citekey: string): Promise<void> {
-    const content = this.getInitialContentForCitekey(citekey);
-    this.editor.replaceRange(content, this.editor.getCursor());
-  }
-
-  async insertMarkdownCitation(
-    citekey: string,
-    alternative = false,
-  ): Promise<void> {
-    const func = alternative
-      ? this.getAlternativeMarkdownCitationForCitekey
-      : this.getMarkdownCitationForCitekey;
-    const citation = func.bind(this)(citekey);
-
+  async insertMarkdownCitation(citekey: string): Promise<void> {
+    const citation = this.getMarkdownCitationForCitekey(citekey);
     this.editor.replaceRange(citation, this.editor.getCursor());
   }
 
@@ -504,7 +394,7 @@ export default class CitationPlugin extends Plugin {
       new Notice('Open a Markdown note before inserting a references block.');
       return;
     }
-    editor.replaceRange('```references\n```', editor.getCursor());
+    editor.replaceRange('```references\n\n```', editor.getCursor());
   }
 
   /**

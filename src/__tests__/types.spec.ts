@@ -6,12 +6,9 @@ import { compile as compileTemplate } from 'handlebars';
 
 import {
   Library,
-  Entry,
   EntryData,
   EntryDataBibLaTeX,
   EntryDataCSL,
-  EntryBibLaTeXAdapter,
-  EntryCSLAdapter,
   loadEntries,
 } from '../types';
 
@@ -135,14 +132,7 @@ function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
 }
 
 function loadBibLaTeXLibrary(entries: EntryDataBibLaTeX[]): Library {
-  return new Library(
-    Object.fromEntries(
-      entries.map((e: EntryDataBibLaTeX) => [
-        e.key,
-        new EntryBibLaTeXAdapter(e),
-      ]),
-    ),
-  );
+  return new Library(entries, 'biblatex');
 }
 
 const renderAdvancedTemplate = (
@@ -234,11 +224,7 @@ describe('csl library', () => {
   });
 
   function loadLibrary(): Library {
-    return new Library(
-      Object.fromEntries(
-        entries.map((e: EntryDataCSL) => [e.id, new EntryCSLAdapter(e)]),
-      ),
-    );
+    return new Library(entries, 'csl-json');
   }
 
   test('can support library', () => {

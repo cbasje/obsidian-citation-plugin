@@ -9,7 +9,7 @@ import {
   SearchMatchPart,
 } from 'obsidian';
 import CitationPlugin from './main';
-import { Entry } from './types';
+import { EntryMetadata } from './types';
 
 // Stub some methods we know are there..
 interface FuzzySuggestModalExt<T> extends FuzzySuggestModal<T> {
@@ -19,7 +19,7 @@ interface ChooserExt {
   useSelectedItem(evt: MouseEvent | KeyboardEvent): void;
 }
 
-class SearchModal extends FuzzySuggestModal<Entry> {
+class SearchModal extends FuzzySuggestModal<EntryMetadata> {
   plugin: CitationPlugin;
   limit = 50;
 
@@ -72,7 +72,7 @@ class SearchModal extends FuzzySuggestModal<Entry> {
     this.eventRefs?.forEach((e) => this.plugin.events.offref(e));
   }
 
-  getItems(): Entry[] {
+  getItems(): EntryMetadata[] {
     if (this.plugin.isLibraryLoading) {
       return [];
     }
@@ -80,7 +80,7 @@ class SearchModal extends FuzzySuggestModal<Entry> {
     return Object.values(this.plugin.library.entries);
   }
 
-  getItemText(item: Entry): string {
+  getItemText(item: EntryMetadata): string {
     return `${item.title} ${item.authorString} ${item.year}`;
   }
 
@@ -101,11 +101,11 @@ class SearchModal extends FuzzySuggestModal<Entry> {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: MouseEvent | KeyboardEvent): void {
+  onChooseItem(item: EntryMetadata, evt: MouseEvent | KeyboardEvent): void {
     this.plugin.openLiteratureNote(item.id, false).catch(console.error);
   }
 
-  renderSuggestion(match: FuzzyMatch<Entry>, el: HTMLElement): void {
+  renderSuggestion(match: FuzzyMatch<EntryMetadata>, el: HTMLElement): void {
     el.empty();
     const entry = match.item;
     const entryTitle = entry.title || '';
@@ -178,7 +178,7 @@ class SearchModal extends FuzzySuggestModal<Entry> {
 
   onInputKeyup(ev: KeyboardEvent) {
     if (ev.key == 'Enter' || ev.key == 'Tab') {
-      ((this as unknown) as FuzzySuggestModalExt<Entry>).chooser.useSelectedItem(
+      ((this as unknown) as FuzzySuggestModalExt<EntryMetadata>).chooser.useSelectedItem(
         ev,
       );
     }
@@ -199,7 +199,7 @@ export class OpenNoteModal extends SearchModal {
     ]);
   }
 
-  onChooseItem(item: Entry, evt: MouseEvent | KeyboardEvent): void {
+  onChooseItem(item: EntryMetadata, evt: MouseEvent | KeyboardEvent): void {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane =
         evt instanceof KeyboardEvent && (evt as KeyboardEvent).ctrlKey;
@@ -222,43 +222,6 @@ export class OpenNoteModal extends SearchModal {
   }
 }
 
-export class InsertNoteLinkModal extends SearchModal {
-  constructor(app: App, plugin: CitationPlugin) {
-    super(app, plugin);
-
-    this.setInstructions([
-      { command: '↑↓', purpose: 'to navigate' },
-      { command: '↵', purpose: 'to insert literature note reference' },
-      { command: 'esc', purpose: 'to dismiss' },
-    ]);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: unknown): void {
-    this.plugin.insertLiteratureNoteLink(item.id).catch(console.error);
-  }
-}
-
-export class InsertNoteContentModal extends SearchModal {
-  constructor(app: App, plugin: CitationPlugin) {
-    super(app, plugin);
-
-    this.setInstructions([
-      { command: '↑↓', purpose: 'to navigate' },
-      {
-        command: '↵',
-        purpose: 'to insert literature note content in active pane',
-      },
-      { command: 'esc', purpose: 'to dismiss' },
-    ]);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: unknown): void {
-    this.plugin.insertLiteratureNoteContent(item.id).catch(console.error);
-  }
-}
-
 export class InsertCitationModal extends SearchModal {
   constructor(app: App, plugin: CitationPlugin) {
     super(app, plugin);
@@ -266,16 +229,12 @@ export class InsertCitationModal extends SearchModal {
     this.setInstructions([
       { command: '↑↓', purpose: 'to navigate' },
       { command: '↵', purpose: 'to insert Markdown citation' },
-      { command: 'shift ↵', purpose: 'to insert secondary Markdown citation' },
       { command: 'esc', purpose: 'to dismiss' },
     ]);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChooseItem(item: Entry, evt: MouseEvent | KeyboardEvent): void {
-    const isAlternative = evt instanceof KeyboardEvent && evt.shiftKey;
-    this.plugin
-      .insertMarkdownCitation(item.id, isAlternative)
-      .catch(console.error);
+  onChooseItem(item: EntryMetadata, evt: MouseEvent | KeyboardEvent): void {
+    this.plugin.insertMarkdownCitation(item.id).catch(console.error);
   }
 }

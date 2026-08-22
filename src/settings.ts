@@ -27,10 +27,7 @@ export class CitationsPluginSettings {
     'title: {{title}}\n' +
     'authors: {{authorString}}\n' +
     'year: {{year}}\n' +
-    '---\n';
-
-  markdownCitationTemplate = '[@{{citekey}}]';
-  alternativeMarkdownCitationTemplate = '@{{citekey}}';
+    '---\n\n';
 
   cslStyle: CslStyleId = 'apa';
   customCslStylePath = '';
@@ -117,8 +114,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Citation database path')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-        'Can be an absolute path or a path relative to the current vault root folder. ' +
-        'Citations will be automatically reloaded whenever this file updates.',
+          'Can be an absolute path or a path relative to the current vault root folder. ' +
+          'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) =>
         this.buildValueInput(
@@ -226,24 +223,6 @@ export class CitationSettingTab extends PluginSettingTab {
         this.buildValueInput(input, 'literatureNoteContentTemplate'),
       );
 
-    containerEl.createEl('h3', { text: 'Markdown citation templates' });
-    containerEl.createEl('p', {
-      text:
-        'You can insert Pandoc-style Markdown citations rather than literature notes by using the "Insert Markdown citation" command. The below options allow customization of the Markdown citation format.',
-    });
-
-    new Setting(containerEl)
-      .setName('Markdown primary citation template')
-      .addText((input) =>
-        this.buildValueInput(input, 'markdownCitationTemplate'),
-      );
-
-    new Setting(containerEl)
-      .setName('Markdown secondary citation template')
-      .addText((input) =>
-        this.buildValueInput(input, 'alternativeMarkdownCitationTemplate'),
-      );
-
     containerEl.createEl('h3', { text: 'References (CSL)' });
     containerEl.createEl('p', {
       text:
@@ -274,7 +253,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Custom CSL style path')
       .setDesc(
         'Optional path (relative to vault root) to a custom .csl file. ' +
-        'Overrides the style dropdown when set.',
+          'Overrides the style dropdown when set.',
       )
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', () => {
@@ -286,8 +265,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Render inline citations')
       .setDesc(
         'In reading view, replace Pandoc-style [@citekey] markers in the ' +
-        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
-        'The source text is unchanged.',
+          'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
+          'The source text is unchanged.',
       )
       .addToggle((toggle) =>
         toggle
