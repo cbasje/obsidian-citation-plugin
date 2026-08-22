@@ -30,6 +30,13 @@ export class CitationsPluginSettings {
 
   markdownCitationTemplate = '[@{{citekey}}]';
   alternativeMarkdownCitationTemplate = '@{{citekey}}';
+
+  referencesSectionHeading = '# References';
+  referencesTemplate: string =
+    '{{ apaAuthors entry.author }} ({{ year }}). {{ title }}' +
+    '{{#if containerTitle}}, *{{ containerTitle }}*{{/if}}' +
+    '{{#if page}}, {{ page }}{{/if}}. ' +
+    '{{#if DOI}}https://doi.org/{{ DOI }}{{else if URL}}{{ URL }}{{/if}}\n';
 }
 
 export class CitationSettingTab extends PluginSettingTab {
@@ -112,8 +119,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Citation database path')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-          'Can be an absolute path or a path relative to the current vault root folder. ' +
-          'Citations will be automatically reloaded whenever this file updates.',
+        'Can be an absolute path or a path relative to the current vault root folder. ' +
+        'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) =>
         this.buildValueInput(
@@ -237,6 +244,30 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Markdown secondary citation template')
       .addText((input) =>
         this.buildValueInput(input, 'alternativeMarkdownCitationTemplate'),
+      );
+
+    containerEl.createEl('h3', { text: 'References section' });
+    containerEl.createEl('p', {
+      text:
+        'The "Insert/update references section" command scans the current ' +
+        'note for Pandoc-style citations and renders a references section ' +
+        'using the template below (applied once per cited reference). The ' +
+        'section is inserted at the end of the note, or replaced in place ' +
+        'if a section with the configured heading already exists. The ' +
+        'Handlebars helper {{ apaAuthors entry.author }} formats authors ' +
+        'in APA 7 style.',
+    });
+
+    new Setting(containerEl)
+      .setName('References section heading')
+      .addText((input) =>
+        this.buildValueInput(input, 'referencesSectionHeading'),
+      );
+
+    new Setting(containerEl)
+      .setName('References entry template')
+      .addTextArea((input) =>
+        this.buildValueInput(input, 'referencesTemplate'),
       );
   }
 

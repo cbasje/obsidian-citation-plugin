@@ -2,6 +2,7 @@ import {
   FileSystemAdapter,
   MarkdownSourceView,
   MarkdownView,
+  Notice,
   normalizePath,
   Plugin,
   TFile,
@@ -9,13 +10,12 @@ import {
 import * as path from 'path';
 import * as chokidar from 'chokidar';
 import * as CodeMirror from 'codemirror';
-
 import {
   compile as compileTemplate,
   TemplateDelegate as Template,
 } from 'handlebars';
-
-
+import * as Handlebars from 'handlebars';
+import { Author } from './types';
 import CitationEvents from './events';
 import {
   InsertCitationModal,
@@ -40,6 +40,26 @@ import {
   WorkerManagerBlocked,
 } from './util';
 import LoadWorker from 'web-worker:./worker';
+
+// Format a list of authors in APA 7 style, e.g. "Last, F. M., & Last, F. M."
+Handlebars.registerHelper('apaAuthors', (authors: Author[]): string => {
+  if (!authors || authors.length === 0) return '';
+  const formatInitials = (given?: string): string =>
+    (given ?? '')
+      .split(/[\s.-]+/)
+      .filter(Boolean)
+      .map((part) => part[0] + '.')
+      .join(' ');
+  const formatOne = (a: Author): string => {
+    if (!a.family) return a.given ?? '';
+    return a.given ? `${a.family}, ${formatInitials(a.given)}` : a.family;
+  };
+  const formatted = authors.map(formatOne);
+  if (formatted.length === 1) return formatted[0];
+  if (formatted.length === 2) return `${formatted[0]}, & ${formatted[1]}`;
+  return `${formatted.slice(0, -1).join(', ')}, & ${formatted[formatted.length - 1]
+    }`;
+});
 
 export default class CitationPlugin extends Plugin {
   settings: CitationsPluginSettings;
@@ -85,6 +105,8 @@ export default class CitationPlugin extends Plugin {
       'literatureNoteContentTemplate',
       'markdownCitationTemplate',
       'alternativeMarkdownCitationTemplate',
+      'referencesSectionHeading',
+      'referencesTemplate',
     ];
     toLoad.forEach((setting) => {
       if (setting in loadedSettings) {
@@ -177,6 +199,14 @@ export default class CitationPlugin extends Plugin {
       callback: () => {
         const modal = new InsertCitationModal(this.app, this);
         modal.open();
+      },
+    });
+
+    this.addCommand({
+      id: 'insert-references-section',
+      name: 'Insert/update references section',
+      callback: () => {
+        this.insertReferencesSection();
       },
     });
 
@@ -303,6 +333,13 @@ export default class CitationPlugin extends Plugin {
     );
   }
 
+  get referencesTemplate(): Template {
+    return compileTemplate(
+      this.settings.referencesTemplate,
+      this.templateSettings,
+    );
+  }
+
   getTitleForCitekey(citekey: string): string {
     const unsafeTitle = this.literatureNoteTitleTemplate(
       this.library.getTemplateVariablesForCitekey(citekey),
@@ -416,5 +453,77 @@ export default class CitationPlugin extends Plugin {
     const citation = func.bind(this)(citekey);
 
     this.editor.replaceRange(citation, this.editor.getCursor());
+  }
+
+  /**
+   * Scan the current note for Pandoc-style citations (`[@citekey]`, `@citekey`,
+   * or `[-@citekey]`), render each matched reference using the configured
+   * `referencesTemplate`, and insert (or replace) a references section marked
+   * by `referencesSectionHeading`.
+   */
+  async insertReferencesSection(): Promise<void> {
+    const editor = this.editor;
+    if (!editor) {
+      new Notice('Open a Markdown note before inserting a references section.');
+      return;
+    }
+    if (!this.library) {
+      new Notice('Citation library is not loaded.');
+      return;
+    }
+
+    const text = editor.getValue();
+    const citationPattern = /\[-?@([^\]\s]+)\]|\[-?@([^\]\s]+)\]|@([A-Za-z0-9_:-]+)/g;
+    const seen = new Set<string>();
+    let match: RegExpExecArray;
+    while ((match = citationPattern.exec(text)) !== null) {
+      const key = match[1] || match[2] || match[3];
+      if (key) seen.add(key);
+    }
+
+    if (seen.size === 0) {
+      new Notice('No citations found in the current note.');
+      return;
+    }
+
+    const entries = Array.from(seen)
+      .map((k) => this.library.entries[k])
+      .filter(Boolean);
+    if (entries.length === 0) {
+      new Notice('None of the cited citekeys were found in the library.');
+      return;
+    }
+
+    const rendered = entries
+      .map((e) =>
+        this.referencesTemplate(
+          this.library.getTemplateVariablesForCitekey(e.id),
+        ),
+      )
+      .join('\n');
+
+    const heading = this.settings.referencesSectionHeading || '## References';
+    const section = `${heading}\n\n${rendered}`;
+
+    // Replace an existing section starting with the heading, otherwise append.
+    const lines = text.split('\n');
+    const headingLineIndex = lines.findIndex(
+      (l) => l.trim() === heading.trim(),
+    );
+    if (headingLineIndex >= 0) {
+      // Replace from the heading to the end of the document.
+      const from = { line: headingLineIndex, ch: 0 };
+      const to = {
+        line: editor.lastLine(),
+        ch: editor.getLine(editor.lastLine()).length,
+      };
+      editor.replaceRange(section, from, to);
+    } else {
+      // Append at the end of the document.
+      const lastLine = editor.lastLine();
+      const end = { line: lastLine, ch: editor.getLine(lastLine).length };
+      const prefix = editor.getLine(lastLine).trim() === '' ? '\n' : '\n\n';
+      editor.replaceRange(`${prefix}${section}`, end);
+    }
   }
 }
