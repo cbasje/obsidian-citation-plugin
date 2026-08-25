@@ -22,13 +22,18 @@ export class CitationsPluginSettings {
 
   literatureNoteTitleTemplate = '@{{citekey}}';
   literatureNoteFolder = 'Reading notes';
-  literatureNoteContentTemplate: string =
-    '---\n' +
-    'title: {{title}}\n' +
-    'authors: {{authorString}}\n' +
-    'year: {{year}}\n' +
-    '{{#if files}}file: "{{files.[0]}}"{{/if}}\n' +
-    '---\n\n';
+  literatureNoteContentTemplate = `
+---
+title: {{title}}
+authors: {{authorString}}
+year: {{year}}
+{{#if files}}files:
+{{#each files}}
+  - "{{this}}"
+{{/each}}
+{{/if}}
+---
+`;
 
   cslStyle: CslStyleId = 'apa';
   customCslStylePath = '';
@@ -115,8 +120,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Citation database path')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-          'Can be an absolute path or a path relative to the current vault root folder. ' +
-          'Citations will be automatically reloaded whenever this file updates.',
+        'Can be an absolute path or a path relative to the current vault root folder. ' +
+        'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) =>
         this.buildValueInput(
@@ -254,7 +259,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Custom CSL style path')
       .setDesc(
         'Optional path (relative to vault root) to a custom .csl file. ' +
-          'Overrides the style dropdown when set.',
+        'Overrides the style dropdown when set.',
       )
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', () => {
@@ -266,8 +271,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Render inline citations')
       .setDesc(
         'In reading view, replace Pandoc-style [@citekey] markers in the ' +
-          'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
-          'The source text is unchanged.',
+        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
+        'The source text is unchanged.',
       )
       .addToggle((toggle) =>
         toggle
