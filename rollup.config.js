@@ -2,6 +2,7 @@ import typescript from '@rollup/plugin-typescript';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
+import replace from '@rollup/plugin-replace';
 import { readFileSync } from 'fs';
 
 export default {
@@ -16,6 +17,13 @@ export default {
   plugins: [
     typescript(),
     nodeResolve({ browser: true }),
+    replace({
+      values: {
+        "require('fs')": 'undefined',
+        "require('path')": 'undefined',
+      },
+      delimiters: ['', ''],
+    }),
     commonjs(),
     json(),
     {
