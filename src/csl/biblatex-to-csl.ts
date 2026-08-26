@@ -71,12 +71,12 @@ export function bibLaTeXToCsl(entry: EntryDataBibLaTeX): EntryDataCSL {
   const mapNames = (
     list:
       | {
-          firstName?: string;
-          lastName?: string;
-          prefix?: string;
-          suffix?: string;
-          literal?: string;
-        }[]
+        firstName?: string;
+        lastName?: string;
+        prefix?: string;
+        suffix?: string;
+        literal?: string;
+      }[]
       | undefined,
   ) =>
     list?.map((n) => {
@@ -158,12 +158,12 @@ export function bibLaTeXToCsl(entry: EntryDataBibLaTeX): EntryDataCSL {
 function parseDateParts(raw: string): number[] {
   const trimmed = raw.trim();
   // Take the start of a range (before `/`).
-  const start = trimmed.split('/')[0].trim();
+  const start = trimmed.split('/')[0]!.trim();
 
   // Handle `date-parts` style already encoded, or plain year.
   const numeric = start.match(/^(-?\d{3,4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/);
   if (numeric) {
-    const parts = [parseInt(numeric[1], 10)];
+    const parts = [parseInt(numeric[1]!, 10)];
     if (numeric[2]) parts.push(parseInt(numeric[2], 10));
     if (numeric[3]) parts.push(parseInt(numeric[3], 10));
     return parts;
@@ -171,7 +171,7 @@ function parseDateParts(raw: string): number[] {
 
   // Fall back to a bare 4-digit year anywhere in the string.
   const yearOnly = start.match(/(-?\d{4})/);
-  if (yearOnly) return [parseInt(yearOnly[1], 10)];
+  if (yearOnly) return [parseInt(yearOnly[1]!, 10)];
 
   return [];
 }

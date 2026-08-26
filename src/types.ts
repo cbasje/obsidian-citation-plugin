@@ -1,16 +1,17 @@
 import * as BibTeXParser from '@retorquere/bibtex-parser';
 import { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
+
 // Also make EntryDataBibLaTeX available to other modules
-export { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
+export type { EntryDataBibLaTeX };
 
 // Trick: allow string indexing onto object properties
 export interface IIndexable {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const databaseTypes = ['csl-json', 'biblatex'] as const;
-export type DatabaseType = typeof databaseTypes[number];
+export type DatabaseType = (typeof databaseTypes)[number];
 
 export const TEMPLATE_VARIABLES = {
   citekey: 'Unique citekey',
@@ -62,7 +63,7 @@ export interface EntryMetadata {
   year?: string;
   note?: string;
   zoteroSelectURI: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   [key: string]: any;
 }
 
@@ -85,11 +86,11 @@ export function getEntryMetadata(
 function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
   const authorString = data.author
     ? data.author
-        .map((a) => {
-          if (a.literal) return a.literal;
-          return [a.given, a.family].filter(Boolean).join(' ');
-        })
-        .join(', ')
+      .map((a) => {
+        if (a.literal) return a.literal;
+        return [a.given, a.family].filter(Boolean).join(' ');
+      })
+      .join(', ')
     : undefined;
 
   const year = data.issued?.['date-parts']?.[0]?.[0]?.toString();
@@ -167,8 +168,8 @@ function getBibLaTeXMetadata(
   const noteArr = fields.note;
   const note = noteArr
     ? noteArr
-        .map((el) => el.replace(/(zotero:\/\/.+)/g, '[Link]($1)'))
-        .join('\n\n')
+      .map((el) => el.replace(/(zotero:\/\/.+)/g, '[Link]($1)'))
+      .join('\n\n')
     : undefined;
 
   // Files — parse Better BibTeX file entries into usable links
@@ -227,7 +228,7 @@ function parseYear(raw: string): string | undefined {
  *
  *   description:filename:type:url
  */
-function parseFileEntry(raw: string, basePath?: string): string | undefined {
+function parseFileEntry(raw: string, _basePath?: string): string | undefined {
   const s = raw.trim();
   if (!s) return undefined;
 
@@ -245,22 +246,22 @@ function parseFileEntry(raw: string, basePath?: string): string | undefined {
 
   if (parts.length >= 4) {
     // description:filename:type:url
-    pathPart = parts[1].trim();
-    url = parts[3].trim();
+    pathPart = parts[1]!.trim();
+    url = parts[3]!.trim();
   } else if (parts.length === 3) {
     // description:filename:type  (description may be empty for old format)
-    pathPart = parts[1].trim();
+    pathPart = parts[1]!.trim();
   } else if (parts.length === 2) {
     // path:type  (no description field)
-    if (FILE_TYPE.test(parts[1].trim())) {
-      pathPart = parts[0].trim();
+    if (FILE_TYPE.test(parts[1]!.trim())) {
+      pathPart = parts[0]!.trim();
     } else {
       // description:path  (no type)
-      pathPart = parts[1].trim();
+      pathPart = parts[1]!.trim();
     }
   } else {
     // plain path
-    pathPart = parts[0].trim();
+    pathPart = parts[0]!.trim();
   }
 
   // Resolve relative paths against the .bib file directory.
@@ -310,10 +311,7 @@ export class Library {
    * All metadata fields are available both at the top level (`{{title}}`)
    * and via `{{entry.title}}`.
    */
-  getTemplateVariablesForCitekey(
-    citekey: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Record<string, any> {
+  getTemplateVariablesForCitekey(citekey: string): Record<string, any> {
     const entry = this.entries[citekey];
     return entry ? { entry, ...entry } : {};
   }
@@ -329,7 +327,7 @@ export function loadEntries(
   databaseRaw: string,
   databaseType: DatabaseType,
 ): EntryData[] {
-  let libraryArray: EntryData[];
+  let libraryArray: EntryData[] = [];
 
   if (databaseType == 'csl-json') {
     libraryArray = JSON.parse(databaseRaw);
@@ -351,7 +349,7 @@ export function loadEntries(
     parsed.errors.forEach((error) => {
       console.error(
         `Citation plugin: fatal error loading BibLaTeX entry` +
-          ` (line ${error.line}, column ${error.column}):`,
+        ` (line ${error.line}, column ${error.column}):`,
         error.message,
       );
     });
@@ -384,7 +382,7 @@ export interface EntryDataCSL {
   DOI?: string;
   'event-place'?: string;
   edition?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   issued?: { 'date-parts': [any[]] };
   ISBN?: string;
   ISSN?: string;
@@ -398,6 +396,6 @@ export interface EntryDataCSL {
   title?: string;
   URL?: string;
   volume?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   [key: string]: any;
 }

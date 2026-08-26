@@ -1,12 +1,11 @@
 import {
-  MarkdownSourceView,
+  Editor,
   MarkdownView,
   Notice,
   normalizePath,
   Plugin,
   TFile,
 } from 'obsidian';
-import * as CodeMirror from 'codemirror';
 import {
   compile as compileTemplate,
   TemplateDelegate as Template,
@@ -23,7 +22,7 @@ import type { CitationItem } from 'citeproc';
 
 export default class CitationPlugin extends Plugin {
   settings: CitationsPluginSettings;
-  library: Library;
+  library: Library | null = null;
 
   cslRegistry: CslItemRegistry;
   citeproc: CiteprocEngine;
@@ -44,12 +43,9 @@ export default class CitationPlugin extends Plugin {
     'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
   );
 
-  get editor(): CodeMirror.Editor {
-    const view = this.app.workspace.activeLeaf.view;
-    if (!(view instanceof MarkdownView)) return null;
-
-    const sourceView = view.sourceMode;
-    return (sourceView as MarkdownSourceView).cmEditor;
+  get editor(): Editor | null {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    return view ? view.editor : null;
   }
 
   async loadSettings(): Promise<void> {
@@ -189,16 +185,16 @@ export default class CitationPlugin extends Plugin {
     return lastSlash >= 0 ? p.substring(0, lastSlash) : '';
   }
 
-  async loadLibrary(): Promise<Library> {
+  async loadLibrary(): Promise<Library | null> {
     console.debug('Citation plugin: Reloading library');
     if (!this.settings.citationExportPath) {
       console.warn(
         'Citations plugin: citation export path is not set. Please update plugin settings.',
       );
-      return;
+      return null;
     }
 
-    if (this.isLoading) return;
+    if (this.isLoading) return null;
     this.isLoading = true;
 
     // Unload current library.
@@ -323,8 +319,10 @@ export default class CitationPlugin extends Plugin {
   }
 
   async insertMarkdownCitation(citekey: string): Promise<void> {
+    const editor = this.editor;
+    if (!editor) return;
     const citation = this.getMarkdownCitationForCitekey(citekey);
-    this.editor.replaceRange(citation, this.editor.getCursor());
+    editor.replaceRange(citation, editor.getCursor());
   }
 
   /**
@@ -375,7 +373,7 @@ export default class CitationPlugin extends Plugin {
   async renderReferencesBlock(
     source: string,
     el: HTMLElement,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     ctx: any,
   ): Promise<void> {
     if (

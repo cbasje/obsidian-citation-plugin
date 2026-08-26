@@ -23,9 +23,9 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
   plugin: CitationPlugin;
   limit = 50;
 
-  loadingEl: HTMLElement;
+  loadingEl: HTMLElement | undefined;
 
-  eventRefs: EventRef[];
+  eventRefs: EventRef[] = [];
 
   constructor(app: App, plugin: CitationPlugin) {
     super(app);
@@ -35,11 +35,11 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
 
     this.inputEl.setAttribute('spellcheck', 'false');
 
-    this.loadingEl = this.resultContainerEl.parentElement.createEl('div', {
+    this.loadingEl = this.resultContainerEl.parentElement?.createEl('div', {
       cls: 'zoteroModalLoading',
     });
-    this.loadingEl.createEl('div', { cls: 'zoteroModalLoadingAnimation' });
-    this.loadingEl.createEl('p', {
+    this.loadingEl?.createEl('div', { cls: 'zoteroModalLoadingAnimation' });
+    this.loadingEl?.createEl('p', {
       text: 'Loading citation database. Please wait...',
     });
   }
@@ -73,7 +73,7 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
   }
 
   getItems(): EntryMetadata[] {
-    if (this.plugin.isLibraryLoading) {
+    if (!this.plugin.library || this.plugin.isLibraryLoading) {
       return [];
     }
 
@@ -86,16 +86,16 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
 
   setLoading(loading: boolean): void {
     if (loading) {
-      this.loadingEl.removeClass('d-none');
+      this.loadingEl?.removeClass('d-none');
       this.inputEl.disabled = true;
       this.resultContainerEl.empty();
     } else {
-      this.loadingEl.addClass('d-none');
+      this.loadingEl?.addClass('d-none');
       this.inputEl.disabled = false;
       this.inputEl.focus();
 
       // updateSuggestions is not exposed in the public API.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (this as any).updateSuggestions();
     }
   }
@@ -146,7 +146,7 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
           ] as SearchMatchPart;
         })
         .filter((match: SearchMatchPart) => {
-          const [matchStart, matchEnd] = match;
+          const [matchStart] = match;
           return matchStart >= 0;
         });
     };
@@ -178,9 +178,9 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
 
   onInputKeyup(ev: KeyboardEvent) {
     if (ev.key == 'Enter' || ev.key == 'Tab') {
-      ((this as unknown) as FuzzySuggestModalExt<EntryMetadata>).chooser.useSelectedItem(
-        ev,
-      );
+      (
+        this as unknown as FuzzySuggestModalExt<EntryMetadata>
+      ).chooser.useSelectedItem(ev);
     }
   }
 }

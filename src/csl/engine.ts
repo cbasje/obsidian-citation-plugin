@@ -1,5 +1,5 @@
 import CSL from 'citeproc';
-import type { CitationItem, Citation } from 'citeproc';
+import type { CitationItem } from 'citeproc';
 import { CslItemRegistry } from './registry';
 import { makeLocaleRetriever, resolveStyleXml, CslStyleId } from './assets';
 
@@ -132,7 +132,7 @@ export class CiteprocEngine {
     // registers the citation and returns the rendered string.
     const results: string[] = [];
     for (let i = 0; i < citations.length; i++) {
-      const validItems = citations[i].filter((item) =>
+      const validItems = citations[i]!.filter((item) =>
         this.registry.has(item.id),
       );
       if (validItems.length === 0) {
@@ -147,7 +147,7 @@ export class CiteprocEngine {
         });
         // appendCitationCluster returns [[index, string, citationID], ...]
         if (Array.isArray(rendered) && rendered.length > 0) {
-          results.push(rendered[0][1]);
+          results.push(rendered[0]![1]);
         } else {
           results.push('');
         }

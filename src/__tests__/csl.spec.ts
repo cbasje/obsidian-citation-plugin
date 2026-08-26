@@ -20,7 +20,7 @@ describe('biblatex-to-csl converter', () => {
   });
 
   test('maps core fields', () => {
-    const csl = bibLaTeXToCsl(entries[2]); // aitchison2017you
+    const csl = bibLaTeXToCsl(entries[2]!); // aitchison2017you
 
     expect(csl.id).toBe('aitchison2017you');
     expect(csl.type).toBe('article-journal');
@@ -32,38 +32,38 @@ describe('biblatex-to-csl converter', () => {
     expect(csl.page).toBe('219–227');
     expect(csl.ISSN).toBe('0959-4388');
     expect(csl.volume).toBe('46');
-    expect(csl.issued['date-parts'][0]).toEqual([2017, 10, 1]);
+    expect(csl.issued?.['date-parts'][0]).toEqual([2017, 10, 1]);
   });
 
   test('maps authors', () => {
-    const csl = bibLaTeXToCsl(entries[2]);
+    const csl = bibLaTeXToCsl(entries[2]!);
     expect(csl.author).toHaveLength(2);
-    expect(csl.author[0]).toEqual({
+    expect(csl.author?.[0]).toEqual({
       family: 'Aitchison',
       given: 'Laurence',
     });
   });
 
   test('maps book type', () => {
-    const csl = bibLaTeXToCsl(entries[4]); // bar-ashersiegal2020perspectives
+    const csl = bibLaTeXToCsl(entries[4]!); // bar-ashersiegal2020perspectives
     expect(csl.type).toBe('book');
     expect(csl.publisher).toBe('Springer International Publishing');
     expect(csl['publisher-place']).toBe('Cham');
   });
 
   test('maps online type to webpage', () => {
-    const csl = bibLaTeXToCsl(entries[1]); // abnar2019blackbox
+    const csl = bibLaTeXToCsl(entries[1]!); // abnar2019blackbox
     expect(csl.type).toBe('webpage');
     expect(csl.URL).toBe('http://arxiv.org/abs/1906.01539');
   });
 
   test('falls back to document for unknown types', () => {
-    const fake = ({
+    const fake = {
       key: 'x',
       type: 'somethingweird',
       fields: { title: ['T'] },
       creators: {},
-    } as unknown) as EntryDataBibLaTeX;
+    } as unknown as EntryDataBibLaTeX;
     expect(bibLaTeXToCsl(fake).type).toBe('document');
   });
 });
@@ -84,8 +84,8 @@ describe('CslItemRegistry', () => {
     expect(reg.has('nonexistent')).toBe(false);
 
     const item = reg.retrieve('aitchison2017you');
-    expect(item.id).toBe('aitchison2017you');
-    expect(item.title).toBeDefined();
+    expect(item?.id).toBe('aitchison2017you');
+    expect(item?.title).toBeDefined();
   });
 });
 

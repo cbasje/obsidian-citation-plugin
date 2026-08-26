@@ -10,10 +10,10 @@ export const DISALLOWED_FILENAME_CHARACTERS_RE = /[*"\\/<>:|?]/g;
  */
 export class Notifier {
   static DISAPPEARING_CLASS = 'mod-disappearing';
-  currentNotice?: NoticeExt;
-  mutationObserver?: MutationObserver;
+  currentNotice?: NoticeExt | null;
+  mutationObserver?: MutationObserver | null;
 
-  constructor(public defaultMessage: string) {}
+  constructor(public defaultMessage: string) { }
 
   unload(): void {
     this.hide();
@@ -47,6 +47,8 @@ export class Notifier {
     this.mutationObserver.observe(this.currentNotice.noticeEl, {
       attributeFilter: ['class'],
     });
+
+    return true;
   }
 
   hide(): void {

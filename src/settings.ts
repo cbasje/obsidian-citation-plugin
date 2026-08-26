@@ -16,7 +16,7 @@ const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
 };
 
 export class CitationsPluginSettings {
-  public citationExportPath: string;
+  public citationExportPath: string = '';
   citationExportFormat: DatabaseType = 'csl-json';
 
   literatureNoteTitleTemplate = '@{{citekey}}';
@@ -42,9 +42,9 @@ year: {{year}}
 export class CitationSettingTab extends PluginSettingTab {
   private plugin: CitationPlugin;
 
-  citationPathLoadingEl: HTMLElement;
-  citationPathErrorEl: HTMLElement;
-  citationPathSuccessEl: HTMLElement;
+  citationPathLoadingEl: HTMLElement | undefined;
+  citationPathErrorEl: HTMLElement | undefined;
+  citationPathSuccessEl: HTMLElement | undefined;
 
   constructor(app: App, plugin: CitationPlugin) {
     super(app, plugin);
@@ -53,9 +53,9 @@ export class CitationSettingTab extends PluginSettingTab {
 
   open(): void {
     super.open();
-    this.checkCitationExportPath(
-      this.plugin.settings.citationExportPath,
-    ).then(() => this.showCitationExportPathSuccess());
+    this.checkCitationExportPath(this.plugin.settings.citationExportPath).then(
+      () => this.showCitationExportPathSuccess(),
+    );
   }
 
   addValueChangeCallback<T extends HTMLTextAreaElement | HTMLInputElement>(
@@ -96,16 +96,16 @@ export class CitationSettingTab extends PluginSettingTab {
         this.buildValueInput(
           component.addOptions(CITATION_DATABASE_FORMAT_LABELS),
           'citationExportFormat',
-          (value) => {
+          () => {
             this.checkCitationExportPath(
               this.plugin.settings.citationExportPath,
             ).then((success) => {
               if (success) {
-                this.citationPathSuccessEl.addClass('d-none');
-                this.citationPathLoadingEl.removeClass('d-none');
+                this.citationPathSuccessEl?.addClass('d-none');
+                this.citationPathLoadingEl?.removeClass('d-none');
 
                 this.plugin.loadLibrary().then(() => {
-                  this.citationPathLoadingEl.addClass('d-none');
+                  this.citationPathLoadingEl?.addClass('d-none');
                   this.showCitationExportPathSuccess();
                 });
               }
@@ -119,8 +119,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Citation database path')
       .setDesc(
         'Path to citation library exported by your reference manager, ' +
-          'relative to the vault root folder. ' +
-          'Citations will be automatically reloaded whenever this file updates.',
+        'relative to the vault root folder. ' +
+        'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) =>
         this.buildValueInput(
@@ -128,11 +128,12 @@ export class CitationSettingTab extends PluginSettingTab {
           'citationExportPath',
           (value) => {
             this.checkCitationExportPath(value).then(
-              (success) =>
-                success &&
-                this.plugin
-                  .loadLibrary()
-                  .then(() => this.showCitationExportPathSuccess()),
+              (success) => {
+                if (success)
+                  this.plugin
+                    .loadLibrary()
+                    .then(() => this.showCitationExportPathSuccess());
+              }
             );
           },
         ),
@@ -144,8 +145,7 @@ export class CitationSettingTab extends PluginSettingTab {
     });
     this.citationPathErrorEl = containerEl.createEl('p', {
       cls: 'zoteroSettingCitationPathError d-none',
-      text:
-        'The citation export file cannot be found. Please check the path above.',
+      text: 'The citation export file cannot be found. Please check the path above.',
     });
     this.citationPathSuccessEl = containerEl.createEl('p', {
       cls: 'zoteroSettingCitationPathSuccess d-none',
@@ -248,7 +248,7 @@ export class CitationSettingTab extends PluginSettingTab {
         this.buildValueInput(
           component.addOptions(styleOptions),
           'cslStyle',
-          (value) => {
+          () => {
             this.plugin.loadCiteprocEngine();
           },
         ),
@@ -258,7 +258,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Custom CSL style path')
       .setDesc(
         'Optional path (relative to vault root) to a custom .csl file. ' +
-          'Overrides the style dropdown when set.',
+        'Overrides the style dropdown when set.',
       )
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', () => {
@@ -270,8 +270,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Render inline citations')
       .setDesc(
         'In reading view, replace Pandoc-style [@citekey] markers in the ' +
-          'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
-          'The source text is unchanged.',
+        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
+        'The source text is unchanged.',
       )
       .addToggle((toggle) =>
         toggle
@@ -287,14 +287,14 @@ export class CitationSettingTab extends PluginSettingTab {
    * Returns true iff the path exists in the vault; displays error as a side-effect
    */
   async checkCitationExportPath(filePath: string): Promise<boolean> {
-    this.citationPathLoadingEl.addClass('d-none');
+    this.citationPathLoadingEl?.addClass('d-none');
 
     try {
       await this.plugin.app.vault.adapter.read(filePath);
-      this.citationPathErrorEl.addClass('d-none');
-    } catch (e) {
-      this.citationPathSuccessEl.addClass('d-none');
-      this.citationPathErrorEl.removeClass('d-none');
+      this.citationPathErrorEl?.addClass('d-none');
+    } catch {
+      this.citationPathSuccessEl?.addClass('d-none');
+      this.citationPathErrorEl?.removeClass('d-none');
       return false;
     }
 
@@ -304,9 +304,9 @@ export class CitationSettingTab extends PluginSettingTab {
   showCitationExportPathSuccess(): void {
     if (!this.plugin.library) return;
 
-    this.citationPathSuccessEl.setText(
+    this.citationPathSuccessEl?.setText(
       `Loaded library with ${this.plugin.library.size} references.`,
     );
-    this.citationPathSuccessEl.removeClass('d-none');
+    this.citationPathSuccessEl?.removeClass('d-none');
   }
 }

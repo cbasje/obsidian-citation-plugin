@@ -5,7 +5,6 @@ import { compile as compileTemplate } from 'handlebars';
 
 import {
   Library,
-  EntryData,
   EntryDataBibLaTeX,
   EntryDataCSL,
   loadEntries,
@@ -35,10 +34,10 @@ const expectedRender: Record<string, string>[] = [
     authorString:
       'Samira Abnar, Lisa Beinborn, Rochelle Choenni, Willem Zuidema',
     containerTitle: 'arxiv:1906.01539 [cs, q-bio]',
-    DOI: undefined,
+    DOI: '',
     eprint: '1906.01539',
     eprinttype: 'arxiv',
-    page: undefined,
+    page: '',
     title:
       'Blackbox meets blackbox: Representational Similarity and Stability Analysis of Neural Language Models and Brains',
     titleShort: 'Blackbox meets blackbox',
@@ -62,10 +61,10 @@ const expectedRender: Record<string, string>[] = [
   },
   {
     citekey: 'alexandrescu2006factored',
-    abstract: undefined,
+    abstract: '',
     authorString: 'Andrei Alexandrescu, Katrin Kirchhoff',
-    containerTitle: undefined,
-    DOI: undefined,
+    containerTitle: '',
+    DOI: '',
     page: '1–4',
     title: 'Factored Neural Language Models',
     URL: 'http://aclasb.dfki.de/nlp/bib/N06-2001',
@@ -75,11 +74,11 @@ const expectedRender: Record<string, string>[] = [
   },
   {
     citekey: 'bar-ashersiegal2020perspectives',
-    abstract: undefined,
-    authorString: undefined,
-    containerTitle: undefined,
+    abstract: '',
+    authorString: '',
+    containerTitle: '',
     DOI: '10.1007/978-3-030-34308-8',
-    page: undefined,
+    page: '',
     title:
       'Perspectives on Causation: Selected Papers from the Jerusalem 2017 Workshop',
     URL: 'http://link.springer.com/10.1007/978-3-030-34308-8',
@@ -99,11 +98,11 @@ const BIBLATEX_FIELDS_ONLY = ['eprint', 'eprinttype', 'files', 'note'];
 // Test whether loaded and expected libraries are the same, ignoring casing and
 // hyphenation and the `entry` field
 function matchLibraryRender(
-  actual: Record<string, string>[],
-  expected: Record<string, string>[],
+  actual: Record<string, string | undefined>[],
+  expected: Record<string, string | undefined>[],
   dropFields?: string[],
 ): void {
-  const transform = (dict: Record<string, string>): Record<string, string> => {
+  const transform = (dict: Record<string, string | undefined>): Record<string, string | undefined> => {
     delete dict.entry;
 
     if (dropFields) {
@@ -161,7 +160,7 @@ describe('biblatex library', () => {
   });
 
   test('can support library', () => {
-    const library = loadLibrary();
+    loadLibrary();
   });
 
   test('renders correctly', () => {
@@ -184,31 +183,27 @@ describe('biblatex library', () => {
 describe('biblatex regression tests', () => {
   test('regression 7f9aefe (non-fatal parser error handling)', () => {
     const load = () => {
-      const library = loadBibLaTeXLibrary(
-        loadBibLaTeXEntries('regression_7f9aefe.bib'),
-      );
+      loadBibLaTeXLibrary(loadBibLaTeXEntries('regression_7f9aefe.bib'));
     };
 
     // Make sure we log warning
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'warn').mockImplementation(warnCallback);
 
-    expect(load).not.toThrowError();
+    expect(load).not.toThrow();
     expect(warnCallback.mock.calls.length).toBe(1);
   });
 
   test('regression fe15ef6 (fatal parser error handling)', () => {
     const load = () => {
-      const library = loadBibLaTeXLibrary(
-        loadBibLaTeXEntries('regression_fe15ef6.bib'),
-      );
+      loadBibLaTeXLibrary(loadBibLaTeXEntries('regression_fe15ef6.bib'));
     };
 
     // Make sure we log warning
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'error').mockImplementation(warnCallback);
 
-    expect(load).not.toThrowError();
+    expect(load).not.toThrow();
     expect(warnCallback.mock.calls.length).toBe(1);
   });
 });
@@ -230,7 +225,7 @@ describe('csl library', () => {
   }
 
   test('can support library', () => {
-    const library = loadLibrary();
+    loadLibrary();
   });
 
   test('renders correctly', () => {
