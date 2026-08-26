@@ -2,7 +2,7 @@
  * Defines an event manager for the citations plugin.
  */
 
-import { Events, EventRef } from 'obsidian';
+import { Events, type EventRef } from 'obsidian';
 
 export default class CitationEvents extends Events {
   on(name: 'library-load-start', callback: () => any, ctx?: any): EventRef;

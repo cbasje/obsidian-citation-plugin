@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { loadEntries, EntryDataBibLaTeX } from '../types';
+import { loadEntries, type EntryDataBibLaTeX } from '../types';
 import { CslItemRegistry } from '../csl/registry';
 import { CiteprocEngine } from '../csl/engine';
 

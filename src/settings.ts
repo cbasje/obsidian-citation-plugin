@@ -5,10 +5,13 @@ import {
   PluginSettingTab,
   Setting,
 } from 'obsidian';
-
 import CitationPlugin from './main';
-import { IIndexable, DatabaseType, TEMPLATE_VARIABLES } from './types';
-import { CSL_STYLES, CslStyleId } from './csl/assets';
+import {
+  type IIndexable,
+  type DatabaseType,
+  TEMPLATE_VARIABLES,
+} from './types';
+import { CSL_STYLES, type CslStyleId } from './csl/assets';
 
 const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
   'csl-json': 'CSL-JSON',

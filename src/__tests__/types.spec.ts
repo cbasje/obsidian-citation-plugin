@@ -5,8 +5,8 @@ import { compile as compileTemplate } from 'handlebars';
 
 import {
   Library,
-  EntryDataBibLaTeX,
-  EntryDataCSL,
+  type EntryDataBibLaTeX,
+  type EntryDataCSL,
   loadEntries,
 } from '../types';
 

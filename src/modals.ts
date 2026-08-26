@@ -1,15 +1,15 @@
 import {
   App,
-  EventRef,
-  FuzzyMatch,
+  type EventRef,
+  type FuzzyMatch,
   FuzzySuggestModal,
   Notice,
   renderMatches,
-  SearchMatches,
-  SearchMatchPart,
+  type SearchMatches,
+  type SearchMatchPart,
 } from 'obsidian';
 import CitationPlugin from './main';
-import { EntryMetadata } from './types';
+import type { EntryMetadata } from './types';
 
 // Stub some methods we know are there..
 interface FuzzySuggestModalExt<T> extends FuzzySuggestModal<T> {

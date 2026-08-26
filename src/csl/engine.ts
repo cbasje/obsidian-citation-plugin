@@ -1,7 +1,11 @@
 import CSL from 'citeproc';
 import type { CitationItem } from 'citeproc';
 import { CslItemRegistry } from './registry';
-import { makeLocaleRetriever, resolveStyleXml, CslStyleId } from './assets';
+import {
+  makeLocaleRetriever,
+  resolveStyleXml,
+  type CslStyleId,
+} from './assets';
 
 /**
  * A thin wrapper around `citeproc-js`'s `CSL.Engine`.

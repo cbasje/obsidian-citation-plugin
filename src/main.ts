@@ -8,7 +8,7 @@ import {
 } from 'obsidian';
 import {
   compile as compileTemplate,
-  TemplateDelegate as Template,
+  type TemplateDelegate as Template,
 } from 'handlebars';
 import CitationEvents from './events';
 import { InsertCitationModal, OpenNoteModal } from './modals';
@@ -17,7 +17,7 @@ import { DatabaseType, IIndexable, Library, loadEntries } from './types';
 import { DISALLOWED_FILENAME_CHARACTERS_RE, Notifier } from './util';
 import { CslItemRegistry } from './csl/registry';
 import { CiteprocEngine } from './csl/engine';
-import { BUNDLED_LOCALE_EN_US, CslStyleId } from './csl/assets';
+import { BUNDLED_LOCALE_EN_US, type CslStyleId } from './csl/assets';
 import type { CitationItem } from 'citeproc';
 
 export default class CitationPlugin extends Plugin {
