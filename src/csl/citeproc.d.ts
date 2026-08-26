@@ -28,6 +28,7 @@ declare module 'citeproc' {
   }
 
   export interface Citation {
+    citationID?: string;
     citationItems: CitationItem[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     properties: Record<string, any>;
@@ -45,6 +46,7 @@ declare module 'citeproc' {
     updateUncitedItems(ids: string[]): void;
     makeBibliography(): [BibliographyMeta, string[]];
     makeCitationCluster(items: CitationItem[]): string;
+    appendCitationCluster(citation: Citation): [number, string, string][];
     previewCitationCluster(
       citation: Citation,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

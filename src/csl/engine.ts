@@ -1,5 +1,5 @@
 import CSL from 'citeproc';
-import type { CitationItem } from 'citeproc';
+import type { CitationItem, Citation } from 'citeproc';
 import { CslItemRegistry } from './registry';
 import { makeLocaleRetriever, resolveStyleXml, CslStyleId } from './assets';
 
@@ -99,28 +99,69 @@ export class CiteprocEngine {
   }
 
   /**
-   * Render a single in-text citation from structured citation items
-   * (supporting locators, suppress-author, etc.). Uses
-   * `previewCitationCluster` so this does not advance the engine's citation
-   * state — safe to call repeatedly during Obsidian re-renders.
+   * Render a batch of in-text citations in document order. This rebuilds
+   * the engine's citation state to ensure correct numbering for numeric
+   * styles (e.g. IEEE [1], [2], [3]).
+   *
+   * Returns an array of HTML strings, one per input citation (in the same
+   * order). Empty strings for citations with no valid citekeys.
    */
-  renderInlineCitation(items: CitationItem[]): string {
-    if (!this.engine) return '';
+  renderInlineCitationsBatch(citations: CitationItem[][]): string[] {
+    if (!this.engine) return citations.map(() => '');
 
-    const valid = items.filter((item) => this.registry.has(item.id));
-    if (valid.length === 0) return '';
+    // Rebuild the engine to reset citation state, so repeated renders
+    // (Obsidian re-renders) don't accumulate stale citation numbers.
+    this.rebuildEngine();
+    if (!this.engine) return citations.map(() => '');
 
-    try {
-      this.engine.updateItems(valid.map((i) => i.id));
-      return this.engine.previewCitationCluster(
-        { citationItems: valid, properties: {} },
-        [],
-        [],
-        'html',
-      );
-    } catch (err) {
-      console.error('Citation plugin: inline citation render error:', err);
+    // Register all referenced items in first-appearance order.
+    const orderedIds: string[] = [];
+    const seen = new Set<string>();
+    for (const items of citations) {
+      for (const item of items) {
+        if (this.registry.has(item.id) && !seen.has(item.id)) {
+          seen.add(item.id);
+          orderedIds.push(item.id);
+        }
+      }
     }
-    return '';
+    if (orderedIds.length === 0) return citations.map(() => '');
+    this.engine.updateItems(orderedIds);
+
+    // Process each citation in document order. appendCitationCluster
+    // registers the citation and returns the rendered string.
+    const results: string[] = [];
+    for (let i = 0; i < citations.length; i++) {
+      const validItems = citations[i].filter((item) =>
+        this.registry.has(item.id),
+      );
+      if (validItems.length === 0) {
+        results.push('');
+        continue;
+      }
+      try {
+        const rendered = this.engine.appendCitationCluster({
+          citationID: `cit-${i}`,
+          citationItems: validItems,
+          properties: { noteIndex: i + 1 },
+        });
+        // appendCitationCluster returns [[index, string, citationID], ...]
+        if (Array.isArray(rendered) && rendered.length > 0) {
+          results.push(rendered[0][1]);
+        } else {
+          results.push('');
+        }
+      } catch (err) {
+        console.error('Citation plugin: inline citation render error:', err);
+        results.push('');
+      }
+    }
+
+    // Rebuild again to clean up citation state for the next render pass
+    // (e.g. bibliography rendering).
+    this.rebuildEngine();
+    this.engine.updateItems(orderedIds);
+
+    return results;
   }
 }

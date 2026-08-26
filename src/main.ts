@@ -14,13 +14,7 @@ import {
 import CitationEvents from './events';
 import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
-import {
-  DatabaseType,
-  EntryData,
-  IIndexable,
-  Library,
-  loadEntries,
-} from './types';
+import { DatabaseType, IIndexable, Library, loadEntries } from './types';
 import { DISALLOWED_FILENAME_CHARACTERS_RE, Notifier } from './util';
 import { CslItemRegistry } from './csl/registry';
 import { CiteprocEngine } from './csl/engine';
@@ -431,14 +425,17 @@ export default class CitationPlugin extends Plugin {
    * Walk all text nodes in `el` and replace Pandoc-style `[@citekey]` markers
    * with citeproc-rendered in-text citations. Text inside `<code>` and
    * `<pre>` elements is skipped.
+   *
+   * All citations in the element are collected in document order and rendered
+   * as a batch so numeric styles (e.g. IEEE) assign correct citation numbers.
    */
   renderInlineCitationsInElement(el: HTMLElement): void {
+    // Pass 1: collect all text nodes containing [@ markers.
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
       acceptNode(node: Text): number {
         if (!node.nodeValue || !node.nodeValue.includes('[@')) {
           return NodeFilter.FILTER_REJECT;
         }
-        // Skip inline code and code blocks.
         let parent: Element | null = node.parentElement;
         while (parent && parent !== el) {
           if (parent.tagName === 'CODE' || parent.tagName === 'PRE') {
@@ -456,75 +453,91 @@ export default class CitationPlugin extends Plugin {
       textNodes.push(node as Text);
     }
 
-    for (const textNode of textNodes) {
-      this.replaceCitationsInTextNode(textNode);
+    // Pass 2: collect all parsed citations in document order.
+    interface CollectedCitation {
+      textNode: Text;
+      match: RegExpMatchArray;
+      items: CitationItem[];
     }
-  }
 
-  /**
-   * Replace `[@citekey]` markers in a single text node with rendered
-   * citation spans. If no valid citations are found the text is left
-   * untouched.
-   */
-  private replaceCitationsInTextNode(textNode: Text): void {
-    const text = textNode.nodeValue;
-    if (!text) return;
+    const allCitations: CollectedCitation[] = [];
 
-    // Match bracketed Pandoc citations: [@citekey], [-@citekey],
-    // [@citekey, p. 5], [@a; @b], etc.
-    const pattern = /\[(-?@[^\]]+)\]/g;
-    const matches = Array.from(text.matchAll(pattern));
-    if (matches.length === 0) return;
+    for (const textNode of textNodes) {
+      const text = textNode.nodeValue;
+      if (!text) continue;
 
-    const parent = textNode.parentNode;
-    if (!parent) return;
-
-    let lastIndex = 0;
-    for (const match of matches) {
-      const matchStart = match.index!;
-      const matchEnd = matchStart + match[0].length;
-
-      // Text before the citation.
-      if (matchStart > lastIndex) {
-        parent.insertBefore(
-          document.createTextNode(text.substring(lastIndex, matchStart)),
-          textNode,
-        );
+      const pattern = /\[(-?@[^\]]+)\]/g;
+      const matches = Array.from(text.matchAll(pattern));
+      for (const match of matches) {
+        const items = parseCitationGroup(match[1]);
+        if (items && items.length > 0) {
+          allCitations.push({ textNode, match, items });
+        }
       }
+    }
 
-      const items = parseCitationGroup(match[1]);
-      if (items && items.length > 0) {
-        const html = this.citeproc.renderInlineCitation(items);
-        if (html) {
+    if (allCitations.length === 0) return;
+
+    // Pass 3: render all citations as a batch (assigns correct numbers for
+    // numeric styles like IEEE).
+    const rendered = this.citeproc.renderInlineCitationsBatch(
+      allCitations.map((c) => c.items),
+    );
+
+    // Pass 4: replace markers in the DOM, grouping by text node.
+    const nodesToProcess = Array.from(new Set(textNodes));
+    for (const textNode of nodesToProcess) {
+      const nodeCitations = allCitations
+        .map((c, i) => ({ ...c, rendered: rendered[i] }))
+        .filter((c) => c.textNode === textNode);
+      if (nodeCitations.length === 0) continue;
+
+      const text = textNode.nodeValue;
+      if (!text) continue;
+
+      const parent = textNode.parentNode;
+      if (!parent) continue;
+
+      let lastIndex = 0;
+      for (const cit of nodeCitations) {
+        const matchStart = cit.match.index!;
+        const matchEnd = matchStart + cit.match[0].length;
+
+        // Text before the citation.
+        if (matchStart > lastIndex) {
+          parent.insertBefore(
+            document.createTextNode(text.substring(lastIndex, matchStart)),
+            textNode,
+          );
+        }
+
+        if (cit.rendered) {
           const span = document.createElement('span');
           span.className = 'csl-inline';
           const temp = document.createElement('span');
-          temp.innerHTML = html;
+          temp.innerHTML = cit.rendered;
           while (temp.firstChild) {
             span.appendChild(temp.firstChild);
           }
           parent.insertBefore(span, textNode);
         } else {
           // Rendering failed — keep the original marker.
-          parent.insertBefore(document.createTextNode(match[0]), textNode);
+          parent.insertBefore(document.createTextNode(cit.match[0]), textNode);
         }
-      } else {
-        // Not a valid citation — keep the original text.
-        parent.insertBefore(document.createTextNode(match[0]), textNode);
+
+        lastIndex = matchEnd;
       }
 
-      lastIndex = matchEnd;
-    }
+      // Remaining text after the last citation in this text node.
+      if (lastIndex < text.length) {
+        parent.insertBefore(
+          document.createTextNode(text.substring(lastIndex)),
+          textNode,
+        );
+      }
 
-    // Remaining text after the last citation.
-    if (lastIndex < text.length) {
-      parent.insertBefore(
-        document.createTextNode(text.substring(lastIndex)),
-        textNode,
-      );
+      parent.removeChild(textNode);
     }
-
-    parent.removeChild(textNode);
   }
 }
 

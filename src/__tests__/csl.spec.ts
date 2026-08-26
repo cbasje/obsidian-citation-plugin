@@ -176,9 +176,11 @@ describe('CiteprocEngine inline citations', () => {
     const engine = new CiteprocEngine(reg);
     engine.configure('apa');
 
-    const html = engine.renderInlineCitation([{ id: 'aitchison2017you' }]);
-    expect(html).toContain('Aitchison');
-    expect(html).toContain('2017');
+    const html = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you' }],
+    ]);
+    expect(html[0]).toContain('Aitchison');
+    expect(html[0]).toContain('2017');
   });
 
   test('renders multiple citations in one cluster', () => {
@@ -188,12 +190,11 @@ describe('CiteprocEngine inline citations', () => {
     const engine = new CiteprocEngine(reg);
     engine.configure('apa');
 
-    const html = engine.renderInlineCitation([
-      { id: 'aitchison2017you' },
-      { id: 'Weiner2003' },
+    const html = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you' }, { id: 'Weiner2003' }],
     ]);
-    expect(html).toContain('Aitchison');
-    expect(html).toContain('Weiner');
+    expect(html[0]).toContain('Aitchison');
+    expect(html[0]).toContain('Weiner');
   });
 
   test('renders suppress-author citation', () => {
@@ -203,11 +204,10 @@ describe('CiteprocEngine inline citations', () => {
     const engine = new CiteprocEngine(reg);
     engine.configure('apa');
 
-    const html = engine.renderInlineCitation([
-      { id: 'aitchison2017you', 'suppress-author': true },
+    const html = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you', 'suppress-author': true }],
     ]);
-    // Should contain the year but not the author name as the primary element.
-    expect(html).toContain('2017');
+    expect(html[0]).toContain('2017');
   });
 
   test('renders with locator', () => {
@@ -217,23 +217,10 @@ describe('CiteprocEngine inline citations', () => {
     const engine = new CiteprocEngine(reg);
     engine.configure('apa');
 
-    const html = engine.renderInlineCitation([
-      { id: 'aitchison2017you', locator: 'p. 220' },
+    const html = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you', locator: 'p. 220' }],
     ]);
-    expect(html).toContain('220');
-  });
-
-  test('is stateless (safe for re-render)', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries, 'biblatex');
-
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const first = engine.renderInlineCitation([{ id: 'aitchison2017you' }]);
-    const second = engine.renderInlineCitation([{ id: 'aitchison2017you' }]);
-    // previewCitationCluster should produce the same output on repeated calls.
-    expect(first).toBe(second);
+    expect(html[0]).toContain('220');
   });
 
   test('returns empty for unknown citekeys', () => {
@@ -243,7 +230,60 @@ describe('CiteprocEngine inline citations', () => {
     const engine = new CiteprocEngine(reg);
     engine.configure('apa');
 
-    const html = engine.renderInlineCitation([{ id: 'nonexistent' }]);
-    expect(html).toBe('');
+    const html = engine.renderInlineCitationsBatch([[{ id: 'nonexistent' }]]);
+    expect(html).toEqual(['']);
+  });
+
+  test('IEEE assigns correct citation numbers in batch', () => {
+    const reg = new CslItemRegistry();
+    reg.load(entries, 'biblatex');
+
+    const engine = new CiteprocEngine(reg);
+    engine.configure('ieee');
+
+    const results = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you' }],
+      [{ id: 'Weiner2003' }],
+      [{ id: 'alexandrescu2006factored' }],
+    ]);
+
+    expect(results).toHaveLength(3);
+    expect(results[0]).toContain('1');
+    expect(results[1]).toContain('2');
+    expect(results[2]).toContain('3');
+  });
+
+  test('IEEE is stateless across repeated batch renders', () => {
+    const reg = new CslItemRegistry();
+    reg.load(entries, 'biblatex');
+
+    const engine = new CiteprocEngine(reg);
+    engine.configure('ieee');
+
+    const first = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you' }],
+      [{ id: 'Weiner2003' }],
+    ]);
+    const second = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you' }],
+      [{ id: 'Weiner2003' }],
+    ]);
+
+    expect(first).toEqual(second);
+  });
+
+  test('APA inline batch still works (author-date style)', () => {
+    const reg = new CslItemRegistry();
+    reg.load(entries, 'biblatex');
+
+    const engine = new CiteprocEngine(reg);
+    engine.configure('apa');
+
+    const results = engine.renderInlineCitationsBatch([
+      [{ id: 'aitchison2017you' }],
+    ]);
+
+    expect(results[0]).toContain('Aitchison');
+    expect(results[0]).toContain('2017');
   });
 });

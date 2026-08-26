@@ -123,7 +123,7 @@ function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
 function getBibLaTeXMetadata(
   citekey: string,
   data: EntryDataBibLaTeX,
-  basePath?: string
+  basePath?: string,
 ): EntryMetadata {
   const fields = data.fields || {};
   const creators = data.creators || {};
