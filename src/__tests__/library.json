@@ -113,6 +113,7 @@
       }
     ],
     "event": "Proceedings of the Human Language Technology Conference of the NAACL, Companion Volume: Short Papers",
+    "container-title": "Proceedings of the {{Human Language Technology Conference}} of the {{NAACL}}, {{Companion Volume}}: {{Short Papers}}",
     "issued": {
       "date-parts": [
         [

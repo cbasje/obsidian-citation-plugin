@@ -1,8 +1,5 @@
-import * as BibTeXParser from '@retorquere/bibtex-parser';
-import { Entry as EntryDataBibLaTeX } from '@retorquere/bibtex-parser';
-
-// Also make EntryDataBibLaTeX available to other modules
-export type { EntryDataBibLaTeX };
+import { Cite, plugins, type CSL } from '@citation-js/core';
+import '@citation-js/plugin-bibtex';
 
 // Trick: allow string indexing onto object properties
 export interface IIndexable {
@@ -68,9 +65,18 @@ export interface EntryMetadata {
 }
 
 /**
+ * Raw BibLaTeX entry as produced by Citation.js's `chainLink` parser.
+ * Field names are lowercased. Values are strings.
+ */
+export interface BibLaTeXRawEntry {
+  label: string;
+  type: string;
+  properties: Record<string, string>;
+}
+
+/**
  * Extract a flat metadata object from a parsed reference entry, for either
- * CSL-JSON or BibLaTeX databases. This replaces the old `Entry` adapter
- * class hierarchy.
+ * CSL-JSON or BibLaTeX databases.
  */
 export function getEntryMetadata(
   citekey: string,
@@ -121,102 +127,88 @@ function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
   };
 }
 
+/**
+ * Extract metadata from a BibLaTeX entry that has been parsed by Citation.js
+ * into CSL-JSON (for standard fields) with the raw BibLaTeX properties
+ * attached under `_biblatex` (for BibLaTeX-specific fields like `file`,
+ * `eprint`, `eprinttype`, and raw LaTeX `note`).
+ */
 function getBibLaTeXMetadata(
   citekey: string,
   data: EntryDataBibLaTeX,
   basePath?: string,
 ): EntryMetadata {
-  const fields = data.fields || {};
-  const creators = data.creators || {};
+  const raw = data._biblatex?.properties || {};
 
-  const first = (key: string): string | undefined => {
-    const val = fields[key];
-    return Array.isArray(val) && val.length > 0 ? val[0] : undefined;
-  };
-
-  // Author string
-  let authorString: string | undefined;
-  const authorCreators = creators.author;
-  if (authorCreators) {
-    authorString = authorCreators
-      .map((name) => {
-        if (name.literal) return name.literal;
-        const parts = [name.firstName, name.prefix, name.lastName, name.suffix];
-        return parts.filter(Boolean).join(' ');
+  // Author string from CSL authors (parsed into {given, family} by Citation.js)
+  const authorString = data.author
+    ? data.author
+      .map((a) => {
+        if (a.literal) return a.literal;
+        return [a.given, a.family].filter(Boolean).join(' ');
       })
-      .join(', ');
-  } else {
-    authorString = fields.author?.join(', ');
-  }
+      .join(', ')
+    : undefined;
 
-  // Container title (with eprint fallback for arXiv etc.)
+  // Container title: prefer CSL, fall back to raw BibLaTeX fields, then
+  // construct from eprint for arXiv-style entries with no journal.
   const containerTitle =
-    first('journaltitle') || first('journal') || first('booktitle');
+    (data['container-title'] as string) ||
+    raw.journaltitle ||
+    raw.journal ||
+    raw.booktitle ||
+    raw.eventtitle;
   let resolvedContainerTitle = containerTitle;
-  if (!resolvedContainerTitle && fields.eprint) {
-    const prefix = first('eprinttype') ? `${first('eprinttype')}:` : '';
-    const primaryclass = first('primaryclass') || first('primaryClass');
+  if (!resolvedContainerTitle && raw.eprint) {
+    const prefix = raw.eprinttype ? `${raw.eprinttype}:` : '';
+    const primaryclass = raw.primaryclass || raw.primaryClass;
     const suffix = primaryclass ? ` [${primaryclass}]` : '';
-    resolvedContainerTitle = `${prefix}${first('eprint')}${suffix}`;
+    resolvedContainerTitle = `${prefix}${raw.eprint}${suffix}`;
   }
 
-  // Year
-  const yearRaw = first('year') || first('date');
-  const year = yearRaw ? parseYear(yearRaw) : undefined;
+  // Year from CSL issued date-parts
+  const year = data.issued?.['date-parts']?.[0]?.[0]?.toString();
 
-  // Note (with Zotero link formatting)
-  const noteArr = fields.note;
-  const note = noteArr
-    ? noteArr
-      .map((el) => el.replace(/(zotero:\/\/.+)/g, '[Link]($1)'))
-      .join('\n\n')
+  // Note: use raw BibLaTeX (LaTeX formatting preserved), not CSL (HTML).
+  // Format Zotero select links as Markdown.
+  const noteRaw = raw.note;
+  const note = noteRaw
+    ? noteRaw.replace(/(zotero:\/\/.+)/g, '[Link]($1)')
     : undefined;
 
   // Files — parse Better BibTeX file entries into usable links
   let files: string[] = [];
-  if (fields.file)
-    files = files.concat(fields.file.flatMap((x) => x.split(';')));
-  if (fields.files)
-    files = files.concat(fields.files.flatMap((x) => x.split(';')));
+  if (raw.file) files = files.concat(raw.file.split(';'));
+  if (raw.files) files = files.concat(raw.files.split(';'));
   files = files
     .map((f) => parseFileEntry(f, basePath))
     .filter(Boolean) as string[];
 
-  // Author (Author[] for templates)
-  const author: Author[] | undefined = authorCreators?.map((a) => ({
-    given: a.firstName,
-    family: a.lastName,
-  }));
-
   return {
     citekey,
-    id: data.key,
+    id: data.id,
     type: data.type,
-    abstract: first('abstract'),
-    author,
+    abstract: data.abstract,
+    author: data.author,
     authorString,
     containerTitle: resolvedContainerTitle,
-    containerTitleShort: first('shortjournal'),
-    DOI: first('doi'),
+    containerTitleShort:
+      (data['container-title-short'] as string) || raw.shortjournal,
+    DOI: data.DOI,
     files: files.length > 0 ? files : undefined,
-    page: first('pages'),
-    title: first('title'),
-    titleShort: first('shorttitle'),
-    URL: first('url'),
-    eventPlace: first('venue'),
-    publisher: first('publisher'),
-    publisherPlace: first('location'),
-    eprint: first('eprint'),
-    eprinttype: first('eprinttype'),
+    page: data.page,
+    title: data.title,
+    titleShort: data['title-short'],
+    URL: data.URL,
+    eventPlace: (data['event-place'] as string) || raw.venue,
+    publisher: data.publisher,
+    publisherPlace: data['publisher-place'] || raw.location,
+    eprint: raw.eprint,
+    eprinttype: raw.eprinttype,
     year,
     note,
-    zoteroSelectURI: `zotero://select/items/@${data.key}`,
+    zoteroSelectURI: `zotero://select/items/@${data.id}`,
   };
-}
-
-function parseYear(raw: string): string | undefined {
-  const m = raw.match(/(-?\d{4})/);
-  return m ? m[1] : undefined;
 }
 
 /**
@@ -295,9 +287,8 @@ export class Library {
     basePath?: string,
   ) {
     this.entries = {};
-    const idKey = databaseType === 'biblatex' ? 'key' : 'id';
     for (const entry of entries) {
-      const id = (entry as IIndexable)[idKey] as string;
+      const id = (entry as EntryDataCSL).id;
       this.entries[id] = getEntryMetadata(id, entry, databaseType, basePath);
     }
   }
@@ -320,44 +311,55 @@ export class Library {
 /**
  * Load reference entries from the given raw database data.
  *
- * Returns a list of `EntryData`, which should be passed to the `Library`
- * constructor along with the database type.
+ * For BibLaTeX, Citation.js parses the input into CSL-JSON (for citeproc)
+ * and the raw BibLaTeX properties are attached under `_biblatex` for
+ * template variables that need BibLaTeX-specific fields (`file`, `eprint`,
+ * `eprinttype`, raw LaTeX `note`).
  */
 export function loadEntries(
   databaseRaw: string,
   databaseType: DatabaseType,
 ): EntryData[] {
-  let libraryArray: EntryData[] = [];
-
-  if (databaseType == 'csl-json') {
-    libraryArray = JSON.parse(databaseRaw);
-  } else if (databaseType == 'biblatex') {
-    const options: BibTeXParser.ParserOptions = {
-      errorHandler: (err) => {
-        console.warn(
-          'Citation plugin: non-fatal error loading BibLaTeX entry:',
-          err,
-        );
-      },
-    };
-
-    const parsed = BibTeXParser.parse(
-      databaseRaw,
-      options,
-    ) as BibTeXParser.Bibliography;
-
-    parsed.errors.forEach((error) => {
-      console.error(
-        `Citation plugin: fatal error loading BibLaTeX entry` +
-        ` (line ${error.line}, column ${error.column}):`,
-        error.message,
-      );
-    });
-
-    libraryArray = parsed.entries;
+  if (databaseType === 'csl-json') {
+    return JSON.parse(databaseRaw) as EntryDataCSL[];
   }
 
-  return libraryArray;
+  if (databaseType === 'biblatex') {
+    let cslEntries: CSL[];
+    try {
+      const cite = new Cite(databaseRaw);
+      cslEntries = cite.data;
+    } catch (err) {
+      console.error(
+        'Citation plugin: fatal error loading BibLaTeX database:',
+        err,
+      );
+      return [];
+    }
+
+    // Also parse raw entries to preserve BibLaTeX-specific fields.
+    let rawEntries: {
+      label: string;
+      type: string;
+      properties: Record<string, string>;
+    }[] = [];
+    try {
+      rawEntries = plugins.input.chainLink(databaseRaw);
+    } catch {
+      // chainLink may fail on malformed input; CSL parse above is the
+      // authoritative one, so continue with empty raw entries.
+    }
+    const rawMap = new Map(rawEntries.map((e) => [e.label, e]));
+
+    return cslEntries.map((csl) => {
+      // Strip Citation.js provenance graph to save memory.
+      const { _graph, ...cleanCsl } = csl as Record<string, unknown>;
+      const raw = rawMap.get((cleanCsl as EntryDataCSL).id);
+      return { ...cleanCsl, _biblatex: raw } as EntryDataBibLaTeX;
+    });
+  }
+
+  return [];
 }
 
 export interface Author {
@@ -367,6 +369,14 @@ export interface Author {
   suffix?: string;
   'non-dropping-particle'?: string;
 }
+
+/**
+ * A CSL-JSON entry with the raw BibLaTeX properties attached.
+ * Only present when the database type is `biblatex`.
+ */
+export type EntryDataBibLaTeX = EntryDataCSL & {
+  _biblatex?: BibLaTeXRawEntry;
+};
 
 export type EntryData = EntryDataCSL | EntryDataBibLaTeX;
 

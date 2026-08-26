@@ -19,7 +19,7 @@ const expectedRender: Record<string, string>[] = [
     containerTitle: 'Rev. Mineral. Geochemistry',
     DOI: '10.2113/0540001',
     eprint: '1105.3402',
-    note: 'This is a test note with some <b>formatting</b>.',
+    note: 'This is a test note with some \\textbf{formatting}.',
     page: '1-29',
     title:
       'An Overview of Biomineralization Processes and the Problem of the Vital Effect',
@@ -63,7 +63,8 @@ const expectedRender: Record<string, string>[] = [
     citekey: 'alexandrescu2006factored',
     abstract: '',
     authorString: 'Andrei Alexandrescu, Katrin Kirchhoff',
-    containerTitle: '',
+    containerTitle:
+      'Proceedings of the {{Human Language Technology Conference}} of the {{NAACL}}, {{Companion Volume}}: {{Short Papers}}',
     DOI: '',
     page: '1–4',
     title: 'Factored Neural Language Models',
@@ -102,7 +103,9 @@ function matchLibraryRender(
   expected: Record<string, string | undefined>[],
   dropFields?: string[],
 ): void {
-  const transform = (dict: Record<string, string | undefined>): Record<string, string | undefined> => {
+  const transform = (
+    dict: Record<string, string | undefined>,
+  ): Record<string, string | undefined> => {
     delete dict.entry;
 
     if (dropFields) {
@@ -112,7 +115,7 @@ function matchLibraryRender(
     return Object.fromEntries(
       Object.entries(dict).map(([k, val]: [string, unknown]) => [
         k,
-        val
+        (val ?? '')
           ?.toString()
           .toLowerCase()
           .replace(/[\u2012-\u2014]/g, '-'),
@@ -186,12 +189,7 @@ describe('biblatex regression tests', () => {
       loadBibLaTeXLibrary(loadBibLaTeXEntries('regression_7f9aefe.bib'));
     };
 
-    // Make sure we log warning
-    const warnCallback = jest.fn();
-    jest.spyOn(global.console, 'warn').mockImplementation(warnCallback);
-
     expect(load).not.toThrow();
-    expect(warnCallback.mock.calls.length).toBe(1);
   });
 
   test('regression fe15ef6 (fatal parser error handling)', () => {

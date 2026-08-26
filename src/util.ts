@@ -13,7 +13,7 @@ export class Notifier {
   currentNotice?: NoticeExt | null;
   mutationObserver?: MutationObserver | null;
 
-  constructor(public defaultMessage: string) { }
+  constructor(public defaultMessage: string) {}
 
   unload(): void {
     this.hide();

@@ -1,10 +1,4 @@
-import {
-  DatabaseType,
-  EntryData,
-  EntryDataBibLaTeX,
-  EntryDataCSL,
-} from '../types';
-import { bibLaTeXToCsl } from './biblatex-to-csl';
+import type { EntryData, EntryDataCSL } from '../types';
 
 /**
  * Holds the raw CSL-JSON items that citeproc-js consumes.
@@ -17,14 +11,14 @@ export class CslItemRegistry {
 
   /**
    * Load (replace) the full set of items from parsed database entries.
+   *
+   * Entries are always CSL-JSON — for BibLaTeX databases, Citation.js
+   * handles the conversion during `loadEntries`.
    */
-  load(entries: EntryData[], type: DatabaseType): void {
+  load(entries: EntryData[]): void {
     this.items.clear();
     for (const entry of entries) {
-      const csl =
-        type === 'csl-json'
-          ? (entry as EntryDataCSL)
-          : bibLaTeXToCsl(entry as EntryDataBibLaTeX);
+      const csl = entry as EntryDataCSL;
       if (csl && csl.id) {
         this.items.set(csl.id, csl);
       }

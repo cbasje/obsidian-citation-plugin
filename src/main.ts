@@ -223,7 +223,7 @@ export default class CitationPlugin extends Plugin {
 
       // Feed raw entries into the CSL registry and (re)build the citeproc
       // engine so bibliography rendering reflects the new data.
-      this.cslRegistry.load(entries, this.settings.citationExportFormat);
+      this.cslRegistry.load(entries);
       await this.loadCiteprocEngine();
 
       this.events.trigger('library-load-complete');
@@ -373,7 +373,6 @@ export default class CitationPlugin extends Plugin {
   async renderReferencesBlock(
     source: string,
     el: HTMLElement,
-
     ctx: any,
   ): Promise<void> {
     if (

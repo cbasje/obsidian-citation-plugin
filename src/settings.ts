@@ -52,6 +52,7 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   open(): void {
+    // @ts-expect-error This does exist
     super.open();
     this.checkCitationExportPath(this.plugin.settings.citationExportPath).then(
       () => this.showCitationExportPathSuccess(),
@@ -127,14 +128,12 @@ export class CitationSettingTab extends PluginSettingTab {
           input.setPlaceholder('path/to/export.bib'),
           'citationExportPath',
           (value) => {
-            this.checkCitationExportPath(value).then(
-              (success) => {
-                if (success)
-                  this.plugin
-                    .loadLibrary()
-                    .then(() => this.showCitationExportPathSuccess());
-              }
-            );
+            this.checkCitationExportPath(value).then((success) => {
+              if (success)
+                this.plugin
+                  .loadLibrary()
+                  .then(() => this.showCitationExportPathSuccess());
+            });
           },
         ),
       );

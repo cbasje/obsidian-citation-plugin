@@ -1,8 +1,12 @@
 import esbuild from 'esbuild';
 import process from 'process';
 import { builtinModules } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const prod = process.argv[2] === 'production';
+const stubPath = fileURLToPath(new URL('./stub-fetch.js', import.meta.url));
+
+const nodePrefixed = builtinModules.map((m) => `node:${m}`);
 
 const context = await esbuild.context({
   entryPoints: ['src/main.ts'],
@@ -22,7 +26,12 @@ const context = await esbuild.context({
     '@lezer/highlight',
     '@lezer/lr',
     ...builtinModules,
+    ...nodePrefixed,
   ],
+  alias: {
+    'sync-fetch': stubPath,
+    'node-fetch': stubPath,
+  },
   format: 'cjs',
   target: 'es2021',
   logLevel: 'info',
