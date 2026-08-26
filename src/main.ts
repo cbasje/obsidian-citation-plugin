@@ -73,6 +73,24 @@ export default class CitationPlugin extends Plugin {
         (this.settings as IIndexable)[setting] = loadedSettings[setting];
       }
     });
+
+    // Canonicalize path-like settings so they compare cleanly against
+    // Obsidian's normalized TFile.path in the vault 'modify' handler.
+    // normalizePath() handles slashes and trailing slashes but does NOT
+    // strip a leading "./", so we do that explicitly here.
+    const pathKeys = [
+      'citationExportPath',
+      'customCslStylePath',
+      'literatureNoteFolder',
+    ];
+    pathKeys.forEach((key) => {
+      const v = (this.settings as IIndexable)[key];
+      if (typeof v === 'string' && v.length > 0) {
+        (this.settings as IIndexable)[key] = normalizePath(
+          v.replace(/^\.\/+/, ''),
+        );
+      }
+    });
   }
 
   async saveSettings(): Promise<void> {
