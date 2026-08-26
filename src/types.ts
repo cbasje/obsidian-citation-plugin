@@ -75,10 +75,11 @@ export function getEntryMetadata(
   citekey: string,
   entry: EntryData,
   databaseType: DatabaseType,
+  basePath?: string,
 ): EntryMetadata {
   return databaseType === 'csl-json'
     ? getCSLMetadata(citekey, entry as EntryDataCSL)
-    : getBibLaTeXMetadata(citekey, entry as EntryDataBibLaTeX);
+    : getBibLaTeXMetadata(citekey, entry as EntryDataBibLaTeX, basePath);
 }
 
 function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
@@ -122,6 +123,7 @@ function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
 function getBibLaTeXMetadata(
   citekey: string,
   data: EntryDataBibLaTeX,
+  basePath?: string
 ): EntryMetadata {
   const fields = data.fields || {};
   const creators = data.creators || {};
@@ -176,7 +178,7 @@ function getBibLaTeXMetadata(
   if (fields.files)
     files = files.concat(fields.files.flatMap((x) => x.split(';')));
   files = files
-    .map((f) => parseFileEntry(f))
+    .map((f) => parseFileEntry(f, basePath))
     .filter(Boolean) as string[];
 
   // Author (Author[] for templates)
@@ -225,7 +227,7 @@ function parseYear(raw: string): string | undefined {
  *
  *   description:filename:type:url
  */
-function parseFileEntry(raw: string): string | undefined {
+function parseFileEntry(raw: string, basePath?: string): string | undefined {
   const s = raw.trim();
   if (!s) return undefined;
 
@@ -286,12 +288,16 @@ function parseFileEntry(raw: string): string | undefined {
 export class Library {
   public entries: { [citekey: string]: EntryMetadata };
 
-  constructor(entries: EntryData[], databaseType: DatabaseType) {
+  constructor(
+    entries: EntryData[],
+    databaseType: DatabaseType,
+    basePath?: string,
+  ) {
     this.entries = {};
     const idKey = databaseType === 'biblatex' ? 'key' : 'id';
     for (const entry of entries) {
       const id = (entry as IIndexable)[idKey] as string;
-      this.entries[id] = getEntryMetadata(id, entry, databaseType);
+      this.entries[id] = getEntryMetadata(id, entry, databaseType, basePath);
     }
   }
 

@@ -1,5 +1,4 @@
 import {
-  FileSystemAdapter,
   MarkdownSourceView,
   MarkdownView,
   Notice,
@@ -7,8 +6,6 @@ import {
   Plugin,
   TFile,
 } from 'obsidian';
-import * as path from 'path';
-import * as chokidar from 'chokidar';
 import * as CodeMirror from 'codemirror';
 import {
   compile as compileTemplate,
@@ -17,17 +14,17 @@ import {
 import CitationEvents from './events';
 import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
-import { EntryData, IIndexable, Library } from './types';
 import {
-  DISALLOWED_FILENAME_CHARACTERS_RE,
-  Notifier,
-  WorkerManager,
-  WorkerManagerBlocked,
-} from './util';
+  DatabaseType,
+  EntryData,
+  IIndexable,
+  Library,
+  loadEntries,
+} from './types';
+import { DISALLOWED_FILENAME_CHARACTERS_RE, Notifier } from './util';
 import { CslItemRegistry } from './csl/registry';
 import { CiteprocEngine } from './csl/engine';
 import { BUNDLED_LOCALE_EN_US, CslStyleId } from './csl/assets';
-import LoadWorker from 'web-worker:./worker';
 import type { CitationItem } from 'citeproc';
 
 export default class CitationPlugin extends Plugin {
@@ -37,14 +34,12 @@ export default class CitationPlugin extends Plugin {
   cslRegistry: CslItemRegistry;
   citeproc: CiteprocEngine;
 
+  private isLoading = false;
+
   // Template compilation options
   private templateSettings = {
     noEscape: true,
   };
-
-  private loadWorker = new WorkerManager(new LoadWorker(), {
-    blockingChannel: true,
-  });
 
   events = new CitationEvents();
 
@@ -100,34 +95,16 @@ export default class CitationPlugin extends Plugin {
     this.citeproc = new CiteprocEngine(this.cslRegistry);
 
     if (this.settings.citationExportPath) {
-      // Load library for the first time
       this.loadLibrary();
 
-      // Set up a watcher to refresh whenever the export is updated
-      try {
-        // Wait until files are finished being written before going ahead with
-        // the refresh -- here, we request that `change` events be accumulated
-        // until nothing shows up for 500 ms
-        // TODO magic number
-        const watchOptions = {
-          awaitWriteFinish: {
-            stabilityThreshold: 500,
-          },
-        };
-
-        chokidar
-          .watch(
-            this.resolveLibraryPath(this.settings.citationExportPath),
-            watchOptions,
-          )
-          .on('change', () => {
+      // Watch for changes to the library file using Obsidian's vault API.
+      this.registerEvent(
+        this.app.vault.on('modify', (file) => {
+          if (file.path === this.settings.citationExportPath) {
             this.loadLibrary();
-          });
-      } catch {
-        this.loadErrorNotifier.show();
-      }
-    } else {
-      // TODO show warning?
+          }
+        }),
+      );
     }
 
     this.addCommand({
@@ -191,85 +168,69 @@ export default class CitationPlugin extends Plugin {
   }
 
   /**
-   * Resolve a provided library path, allowing for relative paths rooted at
-   * the vault directory.
+   * Get the vault-relative directory of the citation database file, used for
+   * resolving relative file paths in `file` fields.
    */
-  resolveLibraryPath(rawPath: string): string {
-    const vaultRoot =
-      this.app.vault.adapter instanceof FileSystemAdapter
-        ? this.app.vault.adapter.getBasePath()
-        : '/';
-    return path.resolve(vaultRoot, rawPath);
+  private getLibraryDir(): string {
+    const p = this.settings.citationExportPath;
+    const lastSlash = p.lastIndexOf('/');
+    return lastSlash >= 0 ? p.substring(0, lastSlash) : '';
   }
 
   async loadLibrary(): Promise<Library> {
     console.debug('Citation plugin: Reloading library');
-    if (this.settings.citationExportPath) {
-      const filePath = this.resolveLibraryPath(
-        this.settings.citationExportPath,
-      );
-
-      // Unload current library.
-      this.events.trigger('library-load-start');
-      this.library = null;
-
-      return FileSystemAdapter.readLocalFile(filePath)
-        .then((buffer) => {
-          // If there is a remaining error message, hide it
-          this.loadErrorNotifier.hide();
-
-          // Decode file as UTF-8.
-          const dataView = new DataView(buffer);
-          const decoder = new TextDecoder('utf8');
-          const value = decoder.decode(dataView);
-
-          return this.loadWorker.post({
-            databaseRaw: value,
-            databaseType: this.settings.citationExportFormat,
-          });
-        })
-        .then((entries: EntryData[]) => {
-          this.library = new Library(
-            entries,
-            this.settings.citationExportFormat,
-          );
-          console.debug(
-            `Citation plugin: successfully loaded library with ${this.library.size} entries.`,
-          );
-
-          // Feed raw entries into the CSL registry and (re)build the
-          // citeproc engine so bibliography rendering reflects the new data.
-          this.cslRegistry.load(entries, this.settings.citationExportFormat);
-          this.loadCiteprocEngine();
-
-          this.events.trigger('library-load-complete');
-
-          return this.library;
-        })
-        .catch((e) => {
-          if (e instanceof WorkerManagerBlocked) {
-            // Silently catch WorkerManager error, which will be thrown if the
-            // library is already being loaded
-            return;
-          }
-
-          console.error(e);
-          this.loadErrorNotifier.show();
-
-          return null;
-        });
-    } else {
+    if (!this.settings.citationExportPath) {
       console.warn(
         'Citations plugin: citation export path is not set. Please update plugin settings.',
       );
+      return;
+    }
+
+    if (this.isLoading) return;
+    this.isLoading = true;
+
+    // Unload current library.
+    this.events.trigger('library-load-start');
+    this.library = null;
+
+    try {
+      const raw = await this.app.vault.adapter.read(
+        this.settings.citationExportPath,
+      );
+      this.loadErrorNotifier.hide();
+
+      const entries = loadEntries(
+        raw,
+        this.settings.citationExportFormat as DatabaseType,
+      );
+
+      this.library = new Library(
+        entries,
+        this.settings.citationExportFormat,
+        this.getLibraryDir(),
+      );
+      console.debug(
+        `Citation plugin: successfully loaded library with ${this.library.size} entries.`,
+      );
+
+      // Feed raw entries into the CSL registry and (re)build the citeproc
+      // engine so bibliography rendering reflects the new data.
+      this.cslRegistry.load(entries, this.settings.citationExportFormat);
+      await this.loadCiteprocEngine();
+
+      this.events.trigger('library-load-complete');
+      return this.library;
+    } catch (e) {
+      console.error(e);
+      this.loadErrorNotifier.show();
+      return null;
+    } finally {
+      this.isLoading = false;
     }
   }
 
-  /**
-   * Returns true iff the library is currently being loaded on the worker thread.
-   */
   get isLibraryLoading(): boolean {
-    return this.loadWorker.blocked;
+    return this.isLoading;
   }
 
   get literatureNoteTitleTemplate(): Template {
@@ -295,8 +256,9 @@ export default class CitationPlugin extends Plugin {
 
   getPathForCitekey(citekey: string): string {
     const title = this.getTitleForCitekey(citekey);
-    // TODO escape note title
-    return path.join(this.settings.literatureNoteFolder, `${title}.md`);
+    const folder = this.settings.literatureNoteFolder || '';
+    const sep = folder && !folder.endsWith('/') ? '/' : '';
+    return normalizePath(`${folder}${sep}${title}.md`);
   }
 
   getInitialContentForCitekey(citekey: string): string {
@@ -314,21 +276,20 @@ export default class CitationPlugin extends Plugin {
    * the given citekey. If no corresponding file is found, create one.
    */
   async getOrCreateLiteratureNoteFile(citekey: string): Promise<TFile> {
-    const path = this.getPathForCitekey(citekey);
-    const normalizedPath = normalizePath(path);
+    const notePath = this.getPathForCitekey(citekey);
 
-    let file = this.app.vault.getAbstractFileByPath(normalizedPath);
+    let file = this.app.vault.getAbstractFileByPath(notePath);
     if (file == null) {
       // First try a case-insensitive lookup.
       const matches = this.app.vault
         .getMarkdownFiles()
-        .filter((f) => f.path.toLowerCase() == normalizedPath.toLowerCase());
+        .filter((f) => f.path.toLowerCase() == notePath.toLowerCase());
       if (matches.length > 0) {
         file = matches[0];
       } else {
         try {
           file = await this.app.vault.create(
-            path,
+            notePath,
             this.getInitialContentForCitekey(citekey),
           );
         } catch (exc) {
@@ -366,12 +327,9 @@ export default class CitationPlugin extends Plugin {
 
     if (this.settings.customCslStylePath) {
       try {
-        const resolved = this.resolveLibraryPath(
+        customXml = await this.app.vault.adapter.read(
           this.settings.customCslStylePath,
         );
-        const buffer = await FileSystemAdapter.readLocalFile(resolved);
-        const dataView = new DataView(buffer);
-        customXml = new TextDecoder('utf8').decode(dataView);
       } catch (err) {
         console.warn(
           'Citation plugin: could not load custom CSL style, falling back to bundled style.',

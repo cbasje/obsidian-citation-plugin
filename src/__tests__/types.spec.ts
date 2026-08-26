@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import * as _ from 'lodash';
 import { compile as compileTemplate } from 'handlebars';
 
 import {
@@ -111,11 +110,14 @@ function matchLibraryRender(
       dropFields.forEach((f) => delete dict[f]);
     }
 
-    return _.mapValues(dict, (val: unknown) =>
-      val
-        ?.toString()
-        .toLowerCase()
-        .replace(/[\u2012-\u2014]/g, '-'),
+    return Object.fromEntries(
+      Object.entries(dict).map(([k, val]: [string, unknown]) => [
+        k,
+        val
+          ?.toString()
+          .toLowerCase()
+          .replace(/[\u2012-\u2014]/g, '-'),
+      ]),
     );
   };
 

@@ -2,7 +2,6 @@ import {
   AbstractTextComponent,
   App,
   DropdownComponent,
-  FileSystemAdapter,
   PluginSettingTab,
   Setting,
 } from 'obsidian';
@@ -119,13 +118,13 @@ export class CitationSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Citation database path')
       .setDesc(
-        'Path to citation library exported by your reference manager. ' +
-        'Can be an absolute path or a path relative to the current vault root folder. ' +
-        'Citations will be automatically reloaded whenever this file updates.',
+        'Path to citation library exported by your reference manager, ' +
+          'relative to the vault root folder. ' +
+          'Citations will be automatically reloaded whenever this file updates.',
       )
       .addText((input) =>
         this.buildValueInput(
-          input.setPlaceholder('/path/to/export.json'),
+          input.setPlaceholder('path/to/export.bib'),
           'citationExportPath',
           (value) => {
             this.checkCitationExportPath(value).then(
@@ -259,7 +258,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Custom CSL style path')
       .setDesc(
         'Optional path (relative to vault root) to a custom .csl file. ' +
-        'Overrides the style dropdown when set.',
+          'Overrides the style dropdown when set.',
       )
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', () => {
@@ -271,8 +270,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Render inline citations')
       .setDesc(
         'In reading view, replace Pandoc-style [@citekey] markers in the ' +
-        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
-        'The source text is unchanged.',
+          'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
+          'The source text is unchanged.',
       )
       .addToggle((toggle) =>
         toggle
@@ -285,15 +284,13 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Returns true iff the path exists; displays error as a side-effect
+   * Returns true iff the path exists in the vault; displays error as a side-effect
    */
   async checkCitationExportPath(filePath: string): Promise<boolean> {
     this.citationPathLoadingEl.addClass('d-none');
 
     try {
-      await FileSystemAdapter.readLocalFile(
-        this.plugin.resolveLibraryPath(filePath),
-      );
+      await this.plugin.app.vault.adapter.read(filePath);
       this.citationPathErrorEl.addClass('d-none');
     } catch (e) {
       this.citationPathSuccessEl.addClass('d-none');
