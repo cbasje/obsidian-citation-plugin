@@ -1,7 +1,8 @@
 import esbuild from 'esbuild';
 import process from 'process';
 import { builtinModules } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'node:url'; import esbuildSvelte from 'esbuild-svelte';
+import { sveltePreprocess } from 'svelte-preprocess';
 
 const prod = process.argv[2] === 'production';
 const stubPath = fileURLToPath(new URL('./stub-fetch.js', import.meta.url));
@@ -44,6 +45,12 @@ const context = await esbuild.context({
     '.csl': 'text',
     '.xml': 'text',
   },
+  plugins: [
+    esbuildSvelte({
+      compilerOptions: { css: 'injected' },
+      preprocess: sveltePreprocess(),
+    }),
+  ]
 });
 
 if (prod) {

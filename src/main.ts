@@ -13,12 +13,20 @@ import {
 import CitationEvents from './events';
 import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
-import { DatabaseType, IIndexable, Library, loadEntries } from './types';
+import {
+  type DatabaseType,
+  fileTypes,
+  type IIndexable,
+  Library,
+  loadEntries,
+  CIT_VIEW_TYPE,
+} from './types';
 import { DISALLOWED_FILENAME_CHARACTERS_RE, Notifier } from './util';
 import { CslItemRegistry } from './csl/registry';
 import { CiteprocEngine } from './csl/engine';
 import { BUNDLED_LOCALE_EN_US, type CslStyleId } from './csl/assets';
 import type { CitationItem } from 'citeproc';
+import { EditorView } from './editor-view';
 
 export default class CitationPlugin extends Plugin {
   settings: CitationsPluginSettings;
@@ -93,8 +101,10 @@ export default class CitationPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  onload(): void {
-    this.loadSettings().then(() => this.init());
+  async onload(): Promise<void> {
+    await this.loadSettings();
+
+    this.init();
   }
 
   async init(): Promise<void> {
@@ -173,6 +183,9 @@ export default class CitationPlugin extends Plugin {
     });
 
     this.addSettingTab(new CitationSettingTab(this.app, this));
+
+    this.registerExtensions(fileTypes as unknown as string[], CIT_VIEW_TYPE);
+    this.registerView(CIT_VIEW_TYPE, (leaf) => new EditorView(leaf, this));
   }
 
   /**

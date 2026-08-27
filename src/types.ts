@@ -6,6 +6,10 @@ export interface IIndexable {
   [key: string]: any;
 }
 
+export const fileTypes = ['bib', 'json'] as const;
+export type FileType = (typeof fileTypes)[number];
+export const CIT_VIEW_TYPE = 'citation-manager';
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const databaseTypes = ['csl-json', 'biblatex'] as const;
 export type DatabaseType = (typeof databaseTypes)[number];
