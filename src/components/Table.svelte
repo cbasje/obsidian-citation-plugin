@@ -1,10 +1,27 @@
 <script lang="ts">
-  import type { EntryMetadata } from '../types';
+  import {
+    type DatabaseType,
+    type EntryData,
+    type EntryDataBibLaTeX,
+    type EntryDataCSL,
+    Library,
+  } from '../types';
 
-  let onChangeFunc: () => void;
-  let entries = $state<EntryMetadata[]>([]);
+  let {
+    dbType,
+    basePath,
+  }: { dbType: DatabaseType; basePath: string | undefined } = $props();
 
-  export function set(input: EntryMetadata[]) {
+  let onChangeFunc: () => void = () => {};
+  let entries = $state<EntryData[]>([]);
+
+  let metadata = $derived.by(() => {
+    if (entries.length === 0) return [];
+    const lib = new Library(entries, dbType, basePath);
+    return Object.values(lib.entries);
+  });
+
+  export function set(input: EntryData[]) {
     entries = input;
   }
   export function get() {
@@ -14,7 +31,44 @@
     onChangeFunc = func;
   }
 
-  const columns: { key: keyof EntryMetadata; label: string }[] = [
+  function generateId(): string {
+    const existing = new Set(entries.map((e) => (e as EntryDataCSL).id));
+    const base = 'untitled';
+    let n = 1;
+    let id = base;
+    while (existing.has(id)) {
+      id = `${base}-${n++}`;
+    }
+    return id;
+  }
+
+  function createEmptyEntry(id: string): EntryData {
+    if (dbType === 'biblatex') {
+      const csl: EntryDataCSL = { id, type: 'article-journal' };
+      return {
+        ...csl,
+        _biblatex: {
+          label: id,
+          type: 'article',
+          properties: {},
+        },
+      } as EntryDataBibLaTeX;
+    }
+    return { id, type: 'article-journal' };
+  }
+
+  function handleAdd() {
+    const id = generateId();
+    entries.push(createEmptyEntry(id));
+    onChangeFunc();
+  }
+
+  function handleRemove(id: string) {
+    entries = entries.filter((e) => (e as EntryDataCSL).id !== id);
+    onChangeFunc();
+  }
+
+  const columns: { key: keyof (typeof metadata)[number]; label: string }[] = [
     { key: 'citekey', label: 'Citekey' },
     { key: 'type', label: 'Type' },
     { key: 'year', label: 'Year' },
@@ -26,208 +80,200 @@
   ];
 </script>
 
-<!-- <button>TEST!</button> -->
-<table>
-  <thead>
-    <tr>
-      {#each columns as col (col.key)}
-        <th>
-          <div class="header">
-            {col.label}
-          </div>
-        </th>
-      {/each}
-    </tr>
-  </thead>
-  <tbody>
-    {#each entries as entry (entry)}
-      <tr>
-        {#each columns as col (col.key)}
-          {@const value = entry[col.key]}
-          <td data-property={col.key}>
-            <div class="cell rendered-value" data-property-type="text">
-              {#if col.key === 'files'}
-                {#if Array.isArray(value) && value.length > 0}
-                  <ul>
-                    {#each value as file, i}
-                      <span>{file}</span><br />
-                    {/each}
-                  </ul>
+<div class="citation-manager">
+  <div class="toolbar">
+    <button class="add-button" onclick={handleAdd}>
+      <span class="icon">+</span> Add reference
+    </button>
+    <span class="count">{entries.length} entries</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          {#each columns as col (col.key)}
+            <th>{col.label}</th>
+          {/each}
+          <th class="actions-col"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each metadata as entry (entry.id)}
+          <tr>
+            {#each columns as col (col.key)}
+              {@const value = entry[col.key]}
+              <td>
+                {#if col.key === 'files'}
+                  {#if Array.isArray(value) && value.length > 0}
+                    <ul>
+                      {#each value as file}
+                        <li>{file}</li>
+                      {/each}
+                    </ul>
+                  {/if}
+                {:else if col.key === 'DOI' && value}
+                  <a href="https://doi.org/{value}">{value}</a>
+                {:else if col.key === 'URL' && value}
+                  <a href={value}>{value}</a>
+                {:else if value}
+                  {value}
                 {/if}
-              {:else if col.key === 'DOI'}
-                <a href="https://doi.org/{value}">{value}</a>
-              {:else if col.key === 'URL'}
-                <a href={value}>{value}</a>
-              {:else if value}
-                {value}
-              {/if}
-            </div>
-          </td>
+              </td>
+            {/each}
+            <td class="actions-col">
+              <button
+                class="remove-button"
+                title="Remove reference"
+                aria-label="Remove reference"
+                onclick={() => handleRemove(entry.id)}>×</button
+              >
+            </td>
+          </tr>
+        {:else}
+          <tr>
+            <td colspan={columns.length + 1} class="empty">
+              No references. Click "Add reference" to create one.
+            </td>
+          </tr>
         {/each}
-      </tr>
-    {/each}
-  </tbody>
-</table>
+      </tbody>
+    </table>
+  </div>
+</div>
 
 <style>
-  table {
-    overflow: auto;
+  .citation-manager {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--size-4-2);
+    padding: var(--size-4-2) var(--size-4-3);
+    border-bottom: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+  }
+
+  .add-button {
+    display: flex;
+    align-items: center;
+    gap: var(--size-4-1);
+  }
+  .add-button .icon {
+    font-size: 1.1em;
+    line-height: 1;
+  }
+
+  .count {
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    margin-left: auto;
+  }
+
+  .table-wrap {
     flex-grow: 1;
-    padding: var(--bases-view-padding);
+    overflow: auto;
     scrollbar-gutter: stable;
   }
 
-  /*.bases-error {
-    padding: 0 var(--size-4-2);
-    color: var(--text-warning);
-    font-size: var(--font-ui-small);
-    text-align: center;
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: auto;
   }
-  .bases-header {
-    container-type: inline-size;
-    container-name: bases-header;
-    display: flex;
-    align-items: center;
-    padding-top: 0;
-    padding-bottom: 0;
-    padding-inline-start: var(--bases-header-padding-start);
-    padding-inline-end: var(--bases-header-padding-end);
-    border-width: var(--bases-header-border-width);
-    border-color: var(--bases-table-border-color);
-    height: var(--bases-header-height);
-    min-height: var(--bases-header-height);
-    border-style: solid;
-  }
-  .bases-header .title {
-    color: var(--h2-color);
-    font-size: var(--h2-size);
-  }
-  @container (width < 540px) {
-    .bases-header .bases-toolbar-item:not(.bases-toolbar-result-count) {
-      --bases-toolbar-label-display: none;
-      --bases-toolbar-badge-display: none;
-    }
-  }*/
 
   thead {
     position: sticky;
-    width: 100%;
-    height: var(--bases-table-row-height);
     top: 0;
-    z-index: var(--layer-cover);
-    justify-content: space-between;
-    background-color: var(--bases-table-header-background);
-    box-shadow: inset 0 calc(var(--bases-table-row-border-width) * -1) 0
-      var(--bases-table-border-color);
-
-    th {
-      white-space: nowrap;
-      align-items: center;
-
-      @media (hover: hover) {
-        background-color: var(--bases-table-header-background-hover);
-      }
-
-      div.header {
-        display: flex;
-        width: 100%;
-        align-items: center;
-        height: var(--bases-table-row-height);
-      }
-    }
+    z-index: 1;
+    background-color: var(--background-secondary);
   }
 
-  tbody {
-    position: relative;
-    width: 100%;
-    background: var(--background-primary);
-    box-shadow: 0 var(--bases-table-row-border-width) 0
-      var(--table-border-color);
+  th {
+    text-align: left;
+    white-space: nowrap;
+    padding: var(--size-4-1) var(--size-4-2);
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-medium);
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--background-modifier-border);
   }
+
   tbody tr:hover {
-    background-color: var(--bases-table-row-background-hover);
-  }
-
-  /*.bases-table-footer {
-    position: sticky !important;
-    bottom: 0;
-    background-color: var(--bases-table-summary-background);
-    width: 100%;
-    z-index: var(--layer-sidedock);
-  }
-  .bases-table-footer .bases-td {
-    box-shadow: none;
-  }*/
-
-  tr {
-    height: var(--bases-table-row-height);
-    display: flex;
-    flex-direction: row;
-    min-width: 100%;
-    box-shadow: 0 calc(var(--bases-table-row-border-width) * -1) 0
-      var(--table-border-color);
+    background-color: var(--background-modifier-hover);
   }
 
   td {
-    box-shadow: calc(var(--bases-table-column-border-width) * -1) 0 0
-      var(--table-border-color);
-    display: flex;
-    height: var(--bases-table-row-height);
+    padding: var(--size-4-1) var(--size-4-2);
+    font-size: var(--font-ui-small);
+    border-bottom: 1px solid var(--background-modifier-border);
+    max-width: 40ch;
     overflow: hidden;
     text-overflow: ellipsis;
-    flex: 1 0 auto;
+    white-space: nowrap;
+  }
 
-    &:focus-within {
-      background-color: var(--bases-table-cell-background-active);
-      border-radius: var(--bases-table-cell-radius-focus);
-      box-shadow: var(--bases-table-cell-shadow-focus);
-      z-index: 1;
-      height: fit-content;
-      min-height: var(--bases-table-row-height);
-    }
+  td ul {
+    margin: 0;
+    padding-left: var(--size-4-3);
+    list-style: square;
+  }
+  td li {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-    > div.cell {
-      display: flex;
-      height: 100%;
-      width: 100%;
+  td a {
+    color: var(--text-accent);
+    text-decoration: none;
+  }
+  td a:hover {
+    text-decoration: underline;
+  }
 
-      /*&[disabled='true'] {
-        background-color: var(--bases-table-cell-background-disabled);
-      }
-      &[data-property-type='checkbox'] {
-        justify-content: center;
-      }
-      & .metadata-input-number,
-      &[data-property-type='number'] {
-        justify-content: flex-end;
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-      }*/
-    }
+  .actions-col {
+    width: 2.2em;
+    text-align: center;
+    white-space: nowrap;
+  }
 
-    .rendered-value {
-      --input-border-width: 0;
-      padding: var(--metadata-input-padding);
-      font-size: var(--bases-table-font-size);
-      text-overflow: ellipsis;
-      overflow: hidden;
+  .remove-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.1em;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+      opacity 0.1s,
+      color 0.1s,
+      background 0.1s;
+  }
+  tbody tr:hover .remove-button {
+    opacity: 1;
+  }
+  .remove-button:hover {
+    color: var(--text-error);
+    background-color: var(--background-modifier-error-hover);
+  }
 
-      /*input {
-        background: transparent;
-        padding: 0;
-      }
-      input[disabled='true'] {
-        pointer-events: none;
-        min-height: 0;
-      }
-      input[disabled='true'][type='date'],
-      input[disabled='true'][type='datetime-local'] {
-        width: auto;
-      }
-      img {
-        width: auto;
-        max-height: 100%;
-      }*/
-    }
+  .empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: var(--size-4-6);
+    white-space: normal;
   }
 </style>

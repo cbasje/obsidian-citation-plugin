@@ -40,7 +40,7 @@ export function deserializeEntries(
         'Citation plugin: fatal error loading BibLaTeX database:',
         err,
       );
-      // @ts-ignore
+      // @ts-expect-error — Node Error.cause not in lib target
       throw new Error('This file could not be parsed as BibLaTeX.', {
         cause: err,
       });
@@ -108,7 +108,7 @@ function validateCslJsonEntries(entries: EntryDataCSL[]): void {
     ) {
       throw new Error(
         'This file is not valid CSL-JSON: every entry must have ' +
-        'string "id" and "type" fields.',
+          'string "id" and "type" fields.',
       );
     }
   }

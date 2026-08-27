@@ -3,7 +3,6 @@ import CitationPlugin from './main';
 import {
   type DatabaseType,
   type EntryData,
-  Library,
   CIT_VIEW_TYPE,
   type FileType,
 } from './types';
@@ -12,10 +11,8 @@ import Table from './components/Table.svelte';
 import { mount, unmount } from 'svelte';
 
 export class EditorView extends TextFileView {
-  /** Raw text last loaded from disk (fallback when nothing has changed). */
+  /** Raw text last loaded from disk (fallback when serialization fails). */
   private value = '';
-  /** Parsed entries, kept as the source of truth for round-tripping. */
-  private entries: EntryData[] = [];
   /** Database type inferred from the file extension. */
   private dbType: DatabaseType | undefined;
   table: ReturnType<typeof Table> | undefined;
@@ -51,11 +48,9 @@ export class EditorView extends TextFileView {
   }
 
   clear(): void {
-    // this.contentEl.empty();
-    this.entries = [];
     this.dbType = undefined;
     this.value = '';
-    this.table.set([]);
+    this.table?.set([]);
   }
 
   /*
@@ -67,9 +62,22 @@ export class EditorView extends TextFileView {
   }
 
   async onLoadFile(file: TFile) {
+    const extension = (this.file?.extension || '').toLowerCase() as FileType;
+    const dbType = this.detectDatabaseType(extension);
+    if (!dbType) {
+      this.renderError(`Unsupported file extension: ".${extension}".`);
+      return;
+    }
+
+    const basePath = this.file?.parent?.path;
+    this.dbType = dbType;
+
     this.table = mount(Table, {
       target: this.contentEl,
-      props: {},
+      props: {
+        dbType,
+        basePath,
+      },
     });
     this.table.onChange(() => {
       this.requestSave();
@@ -101,16 +109,11 @@ export class EditorView extends TextFileView {
   }
 
   private setValue(data: string) {
-    const extension = (this.file?.extension || '').toLowerCase() as FileType;
-    const dbType = this.detectDatabaseType(extension);
-    if (!dbType) {
-      this.renderError(`Unsupported file extension: ".${extension}".`);
-      return;
-    }
+    if (!this.dbType) return;
 
-    let entries;
+    let entries: EntryData[];
     try {
-      entries = deserializeEntries(data, dbType);
+      entries = deserializeEntries(data, this.dbType);
     } catch (e) {
       console.error('Citation plugin: failed to parse file', e);
       this.renderError(
@@ -119,21 +122,16 @@ export class EditorView extends TextFileView {
       return;
     }
 
-    const basePath = this.file?.parent?.path;
-    const library = new Library(entries, dbType, basePath);
-
-    this.dbType = dbType;
-    this.entries = entries;
-    this.table.set(Object.values(library.entries));
+    this.table.set(entries);
     this.value = data;
   }
 
   private getValue() {
-    if (!this.dbType || this.entries.length === 0) {
+    if (!this.dbType || !this.table) {
       return this.value;
     }
     try {
-      return serializeEntries(this.entries, this.dbType);
+      return serializeEntries(this.table.get(), this.dbType);
     } catch (e) {
       console.error('Citation plugin: failed to serialize entries', e);
       return this.value;
@@ -142,10 +140,5 @@ export class EditorView extends TextFileView {
 
   private renderError(message: string) {
     console.error(message);
-    //   this.containerEl.empty();
-    //   this.containerEl.createEl('p', {
-    //     text: message,
-    //     cls: 'csl-placeholder',
-    //   });
   }
 }
