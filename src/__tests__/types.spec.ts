@@ -3,12 +3,8 @@ import * as path from 'path';
 
 import { compile as compileTemplate } from 'handlebars';
 
-import {
-  Library,
-  type EntryDataBibLaTeX,
-  type EntryDataCSL,
-  loadEntries,
-} from '../types';
+import { Library, type EntryDataBibLaTeX, type EntryDataCSL } from '../types';
+import { deserializeEntries } from '../serializer';
 
 const expectedRender: Record<string, string>[] = [
   {
@@ -132,7 +128,7 @@ function matchLibraryRender(
 function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
   const biblatexPath = path.join(__dirname, filename);
   const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return loadEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
+  return deserializeEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
 }
 
 function loadBibLaTeXLibrary(entries: EntryDataBibLaTeX[]): Library {
@@ -201,7 +197,9 @@ describe('biblatex regression tests', () => {
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'error').mockImplementation(warnCallback);
 
-    expect(load).not.toThrow();
+    // A fatal Citation.js parse error surfaces as a clean, user-facing
+    // error rather than crashing or silently yielding an empty library.
+    expect(load).toThrow('This file could not be parsed as BibLaTeX.');
     expect(warnCallback.mock.calls.length).toBe(1);
   });
 });
@@ -211,7 +209,7 @@ describe('csl library', () => {
   beforeEach(() => {
     const cslPath = path.join(__dirname, 'library.json');
     const csl = fs.readFileSync(cslPath, 'utf-8');
-    entries = loadEntries(csl, 'csl-json') as EntryDataCSL[];
+    entries = deserializeEntries(csl, 'csl-json') as EntryDataCSL[];
   });
 
   test('loads', () => {

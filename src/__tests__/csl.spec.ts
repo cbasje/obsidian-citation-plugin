@@ -1,14 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { loadEntries, type EntryDataBibLaTeX } from '../types';
+import { type EntryDataBibLaTeX } from '../types';
+import { deserializeEntries } from '../serializer';
 import { CslItemRegistry } from '../csl/registry';
 import { CiteprocEngine } from '../csl/engine';
 
 function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
   const biblatexPath = path.join(__dirname, filename);
   const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return loadEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
+  return deserializeEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
 }
 
 describe('Citation.js BibLaTeX → CSL conversion', () => {

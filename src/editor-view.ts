@@ -2,15 +2,22 @@ import { TextFileView, TFile, WorkspaceLeaf, type IconName } from 'obsidian';
 import CitationPlugin from './main';
 import {
   type DatabaseType,
+  type EntryData,
   Library,
-  loadEntries,
   CIT_VIEW_TYPE,
   type FileType,
 } from './types';
+import { deserializeEntries, serializeEntries } from './serializer';
 import Table from './components/Table.svelte';
 import { mount, unmount } from 'svelte';
 
 export class EditorView extends TextFileView {
+  /** Raw text last loaded from disk (fallback when nothing has changed). */
+  private value = '';
+  /** Parsed entries, kept as the source of truth for round-tripping. */
+  private entries: EntryData[] = [];
+  /** Database type inferred from the file extension. */
+  private dbType: DatabaseType | undefined;
   table: ReturnType<typeof Table> | undefined;
 
   constructor(
@@ -39,9 +46,15 @@ export class EditorView extends TextFileView {
     this.setValue(data);
   }
 
+  getViewData(): string {
+    return this.getValue();
+  }
+
   clear(): void {
-    console.log('clear');
     // this.contentEl.empty();
+    this.entries = [];
+    this.dbType = undefined;
+    this.value = '';
     this.table.set([]);
   }
 
@@ -97,29 +110,11 @@ export class EditorView extends TextFileView {
 
     let entries;
     try {
-      if (dbType === 'csl-json') {
-        const validationError = this.validateCslJson(data);
-        if (validationError) {
-          this.renderError(validationError);
-          return;
-        }
-      }
-      entries = loadEntries(data, dbType);
+      entries = deserializeEntries(data, dbType);
     } catch (e) {
       console.error('Citation plugin: failed to parse file', e);
       this.renderError(
-        dbType === 'csl-json'
-          ? 'This file is not valid CSL-JSON.'
-          : 'This file could not be parsed as BibLaTeX.',
-      );
-      return;
-    }
-
-    if (!entries || entries.length === 0) {
-      this.renderError(
-        dbType === 'csl-json'
-          ? 'This file is not valid CSL-JSON.'
-          : 'No BibLaTeX entries could be parsed.',
+        e instanceof Error ? e.message : 'Failed to parse file.',
       );
       return;
     }
@@ -127,42 +122,22 @@ export class EditorView extends TextFileView {
     const basePath = this.file?.parent?.path;
     const library = new Library(entries, dbType, basePath);
 
+    this.dbType = dbType;
+    this.entries = entries;
     this.table.set(Object.values(library.entries));
     this.value = data;
   }
 
-  /**
-   * Validate that the raw text is a CSL-JSON array where every entry has
-   * the required `id` and `type` fields. Returns an error message string,
-   * or undefined when the content is valid.
-   */
-  private validateCslJson(raw: string): string | undefined {
-    let parsed: unknown;
+  private getValue() {
+    if (!this.dbType || this.entries.length === 0) {
+      return this.value;
+    }
     try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return 'This file is not valid CSL-JSON.';
+      return serializeEntries(this.entries, this.dbType);
+    } catch (e) {
+      console.error('Citation plugin: failed to serialize entries', e);
+      return this.value;
     }
-    if (!Array.isArray(parsed)) {
-      return 'This file is not valid CSL-JSON: expected a JSON array.';
-    }
-    if (parsed.length === 0) {
-      return 'This file is not valid CSL-JSON: the array is empty.';
-    }
-    for (const entry of parsed) {
-      if (
-        typeof entry !== 'object' ||
-        entry === null ||
-        typeof (entry as { id?: unknown }).id !== 'string' ||
-        typeof (entry as { type?: unknown }).type !== 'string'
-      ) {
-        return (
-          'This file is not valid CSL-JSON: every entry must have ' +
-          'string "id" and "type" fields.'
-        );
-      }
-    }
-    return undefined;
   }
 
   private renderError(message: string) {

@@ -1,6 +1,3 @@
-import { Cite, plugins, type CSL } from '@citation-js/core';
-import '@citation-js/plugin-bibtex';
-
 // Trick: allow string indexing onto object properties
 export interface IIndexable {
   [key: string]: any;
@@ -310,60 +307,6 @@ export class Library {
     const entry = this.entries[citekey];
     return entry ? { entry, ...entry } : {};
   }
-}
-
-/**
- * Load reference entries from the given raw database data.
- *
- * For BibLaTeX, Citation.js parses the input into CSL-JSON (for citeproc)
- * and the raw BibLaTeX properties are attached under `_biblatex` for
- * template variables that need BibLaTeX-specific fields (`file`, `eprint`,
- * `eprinttype`, raw LaTeX `note`).
- */
-export function loadEntries(
-  databaseRaw: string,
-  databaseType: DatabaseType,
-): EntryData[] {
-  if (databaseType === 'csl-json') {
-    return JSON.parse(databaseRaw) as EntryDataCSL[];
-  }
-
-  if (databaseType === 'biblatex') {
-    let cslEntries: CSL[];
-    try {
-      const cite = new Cite(databaseRaw);
-      cslEntries = cite.data;
-    } catch (err) {
-      console.error(
-        'Citation plugin: fatal error loading BibLaTeX database:',
-        err,
-      );
-      return [];
-    }
-
-    // Also parse raw entries to preserve BibLaTeX-specific fields.
-    let rawEntries: {
-      label: string;
-      type: string;
-      properties: Record<string, string>;
-    }[] = [];
-    try {
-      rawEntries = plugins.input.chainLink(databaseRaw);
-    } catch {
-      // chainLink may fail on malformed input; CSL parse above is the
-      // authoritative one, so continue with empty raw entries.
-    }
-    const rawMap = new Map(rawEntries.map((e) => [e.label, e]));
-
-    return cslEntries.map((csl) => {
-      // Strip Citation.js provenance graph to save memory.
-      const { _graph, ...cleanCsl } = csl as Record<string, unknown>;
-      const raw = rawMap.get((cleanCsl as EntryDataCSL).id);
-      return { ...cleanCsl, _biblatex: raw } as EntryDataBibLaTeX;
-    });
-  }
-
-  return [];
 }
 
 export interface Author {

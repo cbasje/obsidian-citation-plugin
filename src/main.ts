@@ -18,9 +18,9 @@ import {
   fileTypes,
   type IIndexable,
   Library,
-  loadEntries,
   CIT_VIEW_TYPE,
 } from './types';
+import { deserializeEntries } from './serializer';
 import { DISALLOWED_FILENAME_CHARACTERS_RE, Notifier } from './util';
 import { CslItemRegistry } from './csl/registry';
 import { CiteprocEngine } from './csl/engine';
@@ -233,7 +233,7 @@ export default class CitationPlugin extends Plugin {
       );
       this.loadErrorNotifier.hide();
 
-      const entries = loadEntries(
+      const entries = deserializeEntries(
         raw,
         this.settings.citationExportFormat as DatabaseType,
       );
@@ -256,7 +256,7 @@ export default class CitationPlugin extends Plugin {
       return this.library;
     } catch (e) {
       console.error(e);
-      this.loadErrorNotifier.show();
+      this.loadErrorNotifier.show(e instanceof Error ? e.message : undefined);
       return null;
     } finally {
       this.isLoading = false;

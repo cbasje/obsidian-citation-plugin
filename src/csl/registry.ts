@@ -13,7 +13,7 @@ export class CslItemRegistry {
    * Load (replace) the full set of items from parsed database entries.
    *
    * Entries are always CSL-JSON — for BibLaTeX databases, Citation.js
-   * handles the conversion during `loadEntries`.
+   * handles the conversion during `deserializeEntries`.
    */
   load(entries: EntryData[]): void {
     this.items.clear();
