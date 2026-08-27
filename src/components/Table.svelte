@@ -1,8 +1,8 @@
 <script lang="ts">
+  import { getMarkdownCitationForCitekey } from '../main';
   import {
     type DatabaseType,
     type EntryData,
-    type EntryDataBibLaTeX,
     type EntryDataCSL,
     Library,
   } from '../types';
@@ -10,14 +10,20 @@
   let {
     dbType,
     basePath,
-  }: { dbType: DatabaseType; basePath: string | undefined } = $props();
+    vaultPath,
+  }: {
+    dbType: DatabaseType;
+    basePath: string | undefined;
+    vaultPath: string | undefined;
+  } = $props();
 
   let onChangeFunc: () => void = () => {};
+  let onAddFunc: () => void = () => {};
   let entries = $state<EntryData[]>([]);
 
   let metadata = $derived.by(() => {
     if (entries.length === 0) return [];
-    const lib = new Library(entries, dbType, basePath);
+    const lib = new Library(entries, dbType, basePath, vaultPath);
     return Object.values(lib.entries);
   });
 
@@ -30,42 +36,31 @@
   export function onChange(func: () => void) {
     onChangeFunc = func;
   }
-
-  function generateId(): string {
-    const existing = new Set(entries.map((e) => (e as EntryDataCSL).id));
-    const base = 'untitled';
-    let n = 1;
-    let id = base;
-    while (existing.has(id)) {
-      id = `${base}-${n++}`;
-    }
-    return id;
-  }
-
-  function createEmptyEntry(id: string): EntryData {
-    if (dbType === 'biblatex') {
-      const csl: EntryDataCSL = { id, type: 'article-journal' };
-      return {
-        ...csl,
-        _biblatex: {
-          label: id,
-          type: 'article',
-          properties: {},
-        },
-      } as EntryDataBibLaTeX;
-    }
-    return { id, type: 'article-journal' };
+  export function onAdd(func: () => void) {
+    onAddFunc = func;
   }
 
   function handleAdd() {
-    const id = generateId();
-    entries.push(createEmptyEntry(id));
-    onChangeFunc();
+    onAddFunc();
   }
 
   function handleRemove(id: string) {
     entries = entries.filter((e) => (e as EntryDataCSL).id !== id);
     onChangeFunc();
+  }
+
+  /**
+   * Append a fetched entry. Called by the editor view after the
+   * AddReferenceModal successfully fetches data.
+   */
+  export function addEntry(entry: EntryData) {
+    entries.push(entry);
+    onChangeFunc();
+  }
+
+  export async function copyCitekey(key: string) {
+    const text = getMarkdownCitationForCitekey(key);
+    await navigator.clipboard.writeText(text);
   }
 
   const columns: { key: keyof (typeof metadata)[number]; label: string }[] = [
@@ -104,7 +99,16 @@
             {#each columns as col (col.key)}
               {@const value = entry[col.key]}
               <td>
-                {#if col.key === 'files'}
+                {#if col.key === 'citekey'}
+                  <span>{value}</span>
+                  <button
+                    title="Copy citation"
+                    aria-label="Copy citation"
+                    onclick={() => copyCitekey(value)}
+                  >
+                    ©
+                  </button>
+                {:else if col.key === 'files'}
                   {#if Array.isArray(value) && value.length > 0}
                     <ul>
                       {#each value as file}
@@ -123,7 +127,6 @@
             {/each}
             <td class="actions-col">
               <button
-                class="remove-button"
                 title="Remove reference"
                 aria-label="Remove reference"
                 onclick={() => handleRemove(entry.id)}>×</button
@@ -242,7 +245,7 @@
     white-space: nowrap;
   }
 
-  .remove-button {
+  button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -256,16 +259,12 @@
     font-size: 1.1em;
     line-height: 1;
     cursor: pointer;
-    opacity: 0;
     transition:
       opacity 0.1s,
       color 0.1s,
       background 0.1s;
   }
-  tbody tr:hover .remove-button {
-    opacity: 1;
-  }
-  .remove-button:hover {
+  button:hover {
     color: var(--text-error);
     background-color: var(--background-modifier-error-hover);
   }

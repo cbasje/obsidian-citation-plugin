@@ -3,13 +3,16 @@ import {
   type EventRef,
   type FuzzyMatch,
   FuzzySuggestModal,
+  Modal,
   Notice,
+  Setting,
   renderMatches,
   type SearchMatches,
   type SearchMatchPart,
 } from 'obsidian';
 import CitationPlugin from './main';
 import type { EntryMetadata } from './types';
+import { ID_TYPES, type IdType } from './fetcher';
 
 // Stub some methods we know are there..
 interface FuzzySuggestModalExt<T> extends FuzzySuggestModal<T> {
@@ -236,5 +239,99 @@ export class InsertCitationModal extends SearchModal {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onChooseItem(item: EntryMetadata, evt: MouseEvent | KeyboardEvent): void {
     this.plugin.insertMarkdownCitation(item.id).catch(console.error);
+  }
+}
+
+export class AddReferenceModal extends Modal {
+  private idType: IdType = 'DOI';
+  private idValue = '';
+  private submitBtn: HTMLButtonElement | undefined;
+
+  constructor(
+    app: App,
+    private onSubmit: (idType: IdType, id: string) => Promise<void>,
+  ) {
+    super(app);
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h2', { text: 'Add reference' });
+
+    new Setting(contentEl).setName('Identifier type').addDropdown((dropdown) =>
+      dropdown
+        .addOptions(
+          Object.fromEntries(ID_TYPES.map((t) => [t.value, t.label])) as Record<
+            string,
+            string
+          >,
+        )
+        .setValue(this.idType)
+        .onChange((value) => {
+          this.idType = value as IdType;
+          this.updatePlaceholder();
+        }),
+    );
+
+    new Setting(contentEl)
+      .setName('Identifier')
+      .setDesc('Enter the identifier for the reference you want to fetch.')
+      .addText((text) => {
+        text.inputEl.addClass('citation-add-id-input');
+        text.onChange((value) => {
+          this.idValue = value;
+          this.updateSubmitState();
+        });
+        // Store reference for placeholder updates
+        (this as { idInputEl?: HTMLInputElement }).idInputEl = text.inputEl;
+        this.updatePlaceholder();
+      });
+
+    new Setting(contentEl).addButton((btn) => {
+      btn.setButtonText('Fetch and add').setClass('mod-cta');
+      btn.buttonEl.addClass('citation-add-submit');
+      this.submitBtn = btn.buttonEl;
+      btn.onClick(() => this.submit());
+      this.updateSubmitState();
+    });
+  }
+
+  private updatePlaceholder() {
+    const inputEl = (this as { idInputEl?: HTMLInputElement }).idInputEl;
+    if (!inputEl) return;
+    const config = ID_TYPES.find((t) => t.value === this.idType);
+    inputEl.placeholder = config?.placeholder ?? '';
+  }
+
+  private updateSubmitState() {
+    if (!this.submitBtn) return;
+    this.submitBtn.disabled = this.idValue.trim().length === 0;
+  }
+
+  private async submit() {
+    if (!this.submitBtn) return;
+    const id = this.idValue.trim();
+    if (!id) return;
+
+    this.submitBtn.disabled = true;
+    this.submitBtn.textContent = 'Fetching…';
+
+    try {
+      await this.onSubmit(this.idType, id);
+      this.close();
+    } catch (e) {
+      console.error('Citation plugin: add reference failed', e);
+      new Notice(
+        e instanceof Error ? e.message : 'Failed to fetch reference.',
+        5000,
+      );
+      this.submitBtn.disabled = false;
+      this.submitBtn.textContent = 'Fetch and add';
+    }
+  }
+
+  onClose() {
+    this.contentEl.empty();
   }
 }

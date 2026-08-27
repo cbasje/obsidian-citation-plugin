@@ -31,7 +31,12 @@ const context = await esbuild.context({
   ],
   alias: {
     'sync-fetch': stubPath,
-    'node-fetch': stubPath,
+    'node-fetch': fileURLToPath(
+      new URL('./stub-node-fetch.js', import.meta.url),
+    ),
+    'fetch-ponyfill': fileURLToPath(
+      new URL('./stub-fetch-ponyfill.js', import.meta.url),
+    ),
   },
   format: 'cjs',
   target: 'es2021',

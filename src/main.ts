@@ -31,6 +31,10 @@ import { buildInlineCitationExtension } from './citations/extension';
 import { extractCitekeys, parseCitationGroup } from './citations/parse';
 import { StatusBarCounter } from './status-bar';
 
+export function getMarkdownCitationForCitekey(citekey: string): string {
+  return `[@${citekey}]`;
+}
+
 export default class CitationPlugin extends Plugin {
   settings: CitationsPluginSettings;
   library: Library | null = null;
@@ -301,10 +305,6 @@ export default class CitationPlugin extends Plugin {
     );
   }
 
-  getMarkdownCitationForCitekey(citekey: string): string {
-    return `[@${citekey}]`;
-  }
-
   /**
    * Run a case-insensitive search for the literature note file corresponding to
    * the given citekey. If no corresponding file is found, create one.
@@ -347,7 +347,7 @@ export default class CitationPlugin extends Plugin {
   async insertMarkdownCitation(citekey: string): Promise<void> {
     const editor = this.editor;
     if (!editor) return;
-    const citation = this.getMarkdownCitationForCitekey(citekey);
+    const citation = getMarkdownCitationForCitekey(citekey);
     editor.replaceRange(citation, editor.getCursor());
   }
 
