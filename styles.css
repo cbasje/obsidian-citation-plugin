@@ -164,3 +164,22 @@
 .csl-inline .csl-right-inline {
   display: inline;
 }
+
+/** Status-bar citation counter **/
+
+.citation-status-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1;
+}
+
+.citation-status-counter__icon {
+  opacity: 0.8;
+}
+
+.citation-status-counter__count {
+  font-variant-numeric: tabular-nums;
+}

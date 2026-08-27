@@ -47,6 +47,18 @@ declare module 'citeproc' {
     makeBibliography(): [BibliographyMeta, string[]];
     makeCitationCluster(items: CitationItem[]): string;
     appendCitationCluster(citation: Citation): [number, string, string][];
+    /**
+     * Rebuild the processor state from a list of citations in document
+     * order and return `[citationID, noteIndex, string]` triples. An
+     * empty/nil list resets the processor to an empty state (cheaply,
+     * without re-parsing the style XML).
+     */
+    rebuildProcessorState(
+      citations: Citation[] | null,
+      mode?: string,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      uncitedItemIDs?: any,
+    ): [string, number, string][];
     previewCitationCluster(
       citation: Citation,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

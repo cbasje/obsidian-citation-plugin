@@ -1,5 +1,5 @@
 import CSL from 'citeproc';
-import type { CitationItem } from 'citeproc';
+import type { Citation, CitationItem } from 'citeproc';
 import { CslItemRegistry } from './registry';
 import {
   makeLocaleRetriever,
@@ -103,69 +103,61 @@ export class CiteprocEngine {
   }
 
   /**
-   * Render a batch of in-text citations in document order. This rebuilds
-   * the engine's citation state to ensure correct numbering for numeric
-   * styles (e.g. IEEE [1], [2], [3]).
+   * Render a batch of in-text citations in document order. Uses
+   * `rebuildProcessorState`, which resets and renders the whole batch in
+   * a single pass (assigning correct sequential numbers for numeric
+   * styles like IEEE within the batch) without re-parsing the CSL style
+   * XML.
    *
-   * Returns an array of HTML strings, one per input citation (in the same
-   * order). Empty strings for citations with no valid citekeys.
+   * Returns an array of HTML strings, one per input citation (in the
+   * same order). Empty strings for citations with no valid citekeys.
    */
   renderInlineCitationsBatch(citations: CitationItem[][]): string[] {
     if (!this.engine) return citations.map(() => '');
 
-    // Rebuild the engine to reset citation state, so repeated renders
-    // (Obsidian re-renders) don't accumulate stale citation numbers.
-    this.rebuildEngine();
-    if (!this.engine) return citations.map(() => '');
+    // Cheaply reset the processor to an empty state so stale citation
+    // state from a previous render pass (or a previous reading-view
+    // chunk) doesn't accumulate. This replaces a full `new CSL.Engine()`
+    // rebuild, which re-parses the style XML and was the main cause of
+    // slow first-load rendering.
+    this.engine.rebuildProcessorState([]);
 
-    // Register all referenced items in first-appearance order.
-    const orderedIds: string[] = [];
-    const seen = new Set<string>();
-    for (const items of citations) {
-      for (const item of items) {
-        if (this.registry.has(item.id) && !seen.has(item.id)) {
-          seen.add(item.id);
-          orderedIds.push(item.id);
-        }
-      }
-    }
-    if (orderedIds.length === 0) return citations.map(() => '');
-    this.engine.updateItems(orderedIds);
-
-    // Process each citation in document order. appendCitationCluster
-    // registers the citation and returns the rendered string.
-    const results: string[] = [];
+    // Build citation objects in document order, keeping the original
+    // index in the citationID so we can map results back.
+    const results: string[] = citations.map(() => '');
+    const objs: { originalIndex: number; citation: Citation }[] = [];
     for (let i = 0; i < citations.length; i++) {
       const validItems = citations[i]!.filter((item) =>
         this.registry.has(item.id),
       );
-      if (validItems.length === 0) {
-        results.push('');
-        continue;
-      }
-      try {
-        const rendered = this.engine.appendCitationCluster({
+      if (validItems.length === 0) continue;
+      objs.push({
+        originalIndex: i,
+        citation: {
           citationID: `cit-${i}`,
           citationItems: validItems,
-          properties: { noteIndex: i + 1 },
-        });
-        // appendCitationCluster returns [[index, string, citationID], ...]
-        if (Array.isArray(rendered) && rendered.length > 0) {
-          results.push(rendered[0]![1]);
-        } else {
-          results.push('');
-        }
-      } catch (err) {
-        console.error('Citation plugin: inline citation render error:', err);
-        results.push('');
+          properties: { noteIndex: i + 1, index: i },
+        },
+      });
+    }
+    if (objs.length === 0) return results;
+
+    try {
+      const triples = this.engine.rebuildProcessorState(
+        objs.map((o) => o.citation),
+        'html',
+      );
+      for (const [citationID, , str] of triples) {
+        const idx = Number(citationID.replace(/^cit-/, ''));
+        if (!Number.isNaN(idx)) results[idx] = str;
       }
+    } catch (err) {
+      console.error('Citation plugin: inline citation render error:', err);
     }
 
-    // Rebuild again to clean up citation state for the next render pass
-    // (e.g. bibliography rendering).
-    this.rebuildEngine();
-    this.engine.updateItems(orderedIds);
-
+    // Reset to empty again so the engine is left clean for any
+    // subsequent bibliography render or batch call.
+    this.engine.rebuildProcessorState([]);
     return results;
   }
 }

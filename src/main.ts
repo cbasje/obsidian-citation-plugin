@@ -27,6 +27,9 @@ import { CiteprocEngine } from './csl/engine';
 import { BUNDLED_LOCALE_EN_US, type CslStyleId } from './csl/assets';
 import type { CitationItem } from 'citeproc';
 import { EditorView } from './editor-view';
+import { buildInlineCitationExtension } from './citations/extension';
+import { extractCitekeys, parseCitationGroup } from './citations/parse';
+import { StatusBarCounter } from './status-bar';
 
 export default class CitationPlugin extends Plugin {
   settings: CitationsPluginSettings;
@@ -111,6 +114,16 @@ export default class CitationPlugin extends Plugin {
     // Initialise CSL registry / engine.
     this.cslRegistry = new CslItemRegistry();
     this.citeproc = new CiteprocEngine(this.cslRegistry);
+
+    // Editor extension: render `[@citekey]` markers as formatted in-text
+    // citations in Live Preview via CodeMirror Decorations. Re-registering
+    // is idempotent (Obsidian dedupes per plugin).
+    this.registerEditorExtension(buildInlineCitationExtension(this));
+
+    // Status-bar counter for inline citations (driven by the
+    // `inline-citations-changed` event from the editor extension).
+    const counter = new StatusBarCounter(this);
+    counter.register();
 
     if (this.settings.citationExportPath) {
       this.loadLibrary();
@@ -567,49 +580,4 @@ export default class CitationPlugin extends Plugin {
       parent.removeChild(textNode);
     }
   }
-}
-
-/**
- * Extract Pandoc-style citekeys (`[@citekey]`, `@citekey`, `[-@citekey]`)
- * from a block of text, preserving order of first appearance.
- */
-function extractCitekeys(text: string): string[] {
-  const pattern = /\[-?@([^\]\s]+)\]|@([A-Za-z0-9_:-]+)/g;
-  const seen = new Set<string>();
-  let match: RegExpExecArray;
-  while ((match = pattern.exec(text)) !== null) {
-    const key = match[1] || match[2];
-    if (key) seen.add(key);
-  }
-  return Array.from(seen);
-}
-
-/**
- * Parse the contents of a bracketed Pandoc citation (the text inside `[@...]`)
- * into an array of citeproc `CitationItem`s.
- *
- * Examples:
- *   "@smith2020"                         → [{id:"smith2020"}]
- *   "-@smith2020"                        → [{id:"smith2020","suppress-author":true}]
- *   "@smith2020, p. 5"                   → [{id:"smith2020",locator:"p. 5"}]
- *   "@smith2020; @jones2019"             → [{id:"smith2020"},{id:"jones2019"}]
- *
- * Returns `null` if the content does not parse as a valid citation group.
- */
-function parseCitationGroup(content: string): CitationItem[] | null {
-  const parts = content.split(';').map((s) => s.trim());
-  const items: CitationItem[] = [];
-
-  for (const part of parts) {
-    const m = part.match(/^(-?)@([^\s,]+)(?:\s*,\s*(.+))?$/);
-    if (!m) return null;
-
-    const [, suppress, citekey, locator] = m;
-    const item: CitationItem = { id: citekey };
-    if (suppress) item['suppress-author'] = true;
-    if (locator) item.locator = locator.trim();
-    items.push(item);
-  }
-
-  return items.length > 0 ? items : null;
 }
