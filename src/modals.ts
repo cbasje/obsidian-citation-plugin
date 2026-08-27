@@ -210,13 +210,20 @@ export class OpenNoteModal extends SearchModal {
     } else if (evt.key == 'Tab') {
       if (evt.shiftKey) {
         const files = item.files || [];
-        const pdfPaths = files.filter((path) =>
-          path.toLowerCase().endsWith('pdf'),
-        );
-        if (pdfPaths.length == 0) {
+        const firstFile = files.at(0);
+        if (!firstFile) {
           new Notice('This reference has no associated PDF files.');
-        } else {
-          open(`file://${pdfPaths[0]}`);
+        } else if (firstFile.startsWith('[[') && firstFile.endsWith(']]')) {
+          const path = firstFile.slice(2, -2).split('/');
+          const fileName = path.pop();
+          if (!fileName) return;
+          this.app.workspace.openLinkText(
+            fileName,
+            path?.join('/') ?? '/',
+            true,
+          );
+        } else if (firstFile.endsWith('.pdf')) {
+          open(`file://${firstFile}`);
         }
       } else {
         open(item.zoteroSelectURI);

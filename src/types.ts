@@ -84,10 +84,16 @@ export function getEntryMetadata(
   entry: EntryData,
   databaseType: DatabaseType,
   basePath?: string,
+  vaultPath?: string,
 ): EntryMetadata {
   return databaseType === 'csl-json'
     ? getCSLMetadata(citekey, entry as EntryDataCSL)
-    : getBibLaTeXMetadata(citekey, entry as EntryDataBibLaTeX, basePath);
+    : getBibLaTeXMetadata(
+      citekey,
+      entry as EntryDataBibLaTeX,
+      basePath,
+      vaultPath,
+    );
 }
 
 function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
@@ -138,6 +144,7 @@ function getBibLaTeXMetadata(
   citekey: string,
   data: EntryDataBibLaTeX,
   basePath?: string,
+  vaultPath?: string,
 ): EntryMetadata {
   const raw = data._biblatex?.properties || {};
 
@@ -182,7 +189,7 @@ function getBibLaTeXMetadata(
   if (raw.file) files = files.concat(raw.file.split(';'));
   if (raw.files) files = files.concat(raw.files.split(';'));
   files = files
-    .map((f) => parseFileEntry(f, basePath))
+    .map((f) => parseFileEntry(f, basePath, vaultPath))
     .filter(Boolean) as string[];
 
   return {
@@ -221,7 +228,11 @@ function getBibLaTeXMetadata(
  *
  *   description:filename:type:url
  */
-function parseFileEntry(raw: string, _basePath?: string): string | undefined {
+function parseFileEntry(
+  raw: string,
+  _basePath?: string,
+  vaultPath?: string,
+): string | undefined {
   const s = raw.trim();
   if (!s) return undefined;
 
@@ -262,6 +273,12 @@ function parseFileEntry(raw: string, _basePath?: string): string | undefined {
   // directory separator — a bare filename like "paper.pdf" is not usable as
   // a local link, so fall through to the URL.
   if (pathPart) {
+    // If the path is inside the Obsidian vault, link to it as a local
+    // (vault-relative) note so Obsidian resolves it natively.
+    if (vaultPath && pathPart.startsWith(vaultPath + '/')) {
+      const relative = pathPart.slice(vaultPath.length + 1);
+      return `[[${relative}]]`;
+    }
     const isAbsolute =
       pathPart.startsWith('/') || /^[A-Za-z]:[\\/]/.test(pathPart);
     if (isAbsolute) {
@@ -286,11 +303,18 @@ export class Library {
     entries: EntryData[],
     databaseType: DatabaseType,
     basePath?: string,
+    vaultPath?: string,
   ) {
     this.entries = {};
     for (const entry of entries) {
       const id = (entry as EntryDataCSL).id;
-      this.entries[id] = getEntryMetadata(id, entry, databaseType, basePath);
+      this.entries[id] = getEntryMetadata(
+        id,
+        entry,
+        databaseType,
+        basePath,
+        vaultPath,
+      );
     }
   }
 
