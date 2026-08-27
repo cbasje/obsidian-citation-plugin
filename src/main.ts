@@ -21,7 +21,7 @@ import {
   CIT_VIEW_TYPE,
 } from './types';
 import { deserializeEntries } from './serializer';
-import { DISALLOWED_FILENAME_CHARACTERS_RE, Notifier } from './util';
+import { DISALLOWED_FILENAME_CHARACTERS_RE } from './util';
 import { CslItemRegistry } from './csl/registry';
 import { CiteprocEngine } from './csl/engine';
 import { BUNDLED_LOCALE_EN_US, type CslStyleId } from './csl/assets';
@@ -36,7 +36,7 @@ export function getMarkdownCitationForCitekey(citekey: string): string {
 }
 
 export default class CitationPlugin extends Plugin {
-  settings: CitationsPluginSettings;
+  settings = new CitationsPluginSettings();
   library: Library | null = null;
 
   cslRegistry: CslItemRegistry;
@@ -50,13 +50,6 @@ export default class CitationPlugin extends Plugin {
   };
 
   events = new CitationEvents();
-
-  loadErrorNotifier = new Notifier(
-    'Unable to load citations. Please update Citations plugin settings.',
-  );
-  literatureNoteErrorNotifier = new Notifier(
-    'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
-  );
 
   get editor(): Editor | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -235,7 +228,6 @@ export default class CitationPlugin extends Plugin {
       const raw = await this.app.vault.adapter.read(
         this.settings.citationExportPath,
       );
-      this.loadErrorNotifier.hide();
 
       const entries = deserializeEntries(
         raw,
@@ -260,7 +252,11 @@ export default class CitationPlugin extends Plugin {
       return this.library;
     } catch (e) {
       console.error(e);
-      this.loadErrorNotifier.show(e instanceof Error ? e.message : undefined);
+      new Notice(
+        e instanceof Error
+          ? e.message
+          : 'Unable to load citations. Please update Citations plugin settings.',
+      );
       return null;
     } finally {
       this.isLoading = false;
@@ -327,7 +323,9 @@ export default class CitationPlugin extends Plugin {
             this.getInitialContentForCitekey(citekey),
           );
         } catch (exc) {
-          this.literatureNoteErrorNotifier.show();
+          new Notice(
+            'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
+          );
           throw exc;
         }
       }

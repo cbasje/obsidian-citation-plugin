@@ -74,8 +74,7 @@ export async function fetchEntryById(
   } catch (err) {
     throw new Error(
       `Could not fetch ${idType} "${id}". ` +
-        'Check your connection and the identifier, then try again.',
-      // @ts-expect-error — Node Error.cause not in lib target
+      'Check your connection and the identifier, then try again.',
       { cause: err },
     );
   }
