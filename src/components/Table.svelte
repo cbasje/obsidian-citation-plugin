@@ -7,6 +7,10 @@
     Library,
   } from '../types';
 
+  import IconClipboardCopy from '@lucide/svelte/icons/clipboard-copy';
+  import IconPlus from '@lucide/svelte/icons/plus';
+  import IconTrash from '@lucide/svelte/icons/trash';
+
   let {
     dbType,
     basePath,
@@ -77,8 +81,9 @@
 
 <div class="citation-manager">
   <div class="toolbar">
-    <button class="add-button" onclick={handleAdd}>
-      <span class="icon">+</span> Add reference
+    <button class="text-icon-button" onclick={handleAdd}>
+      <IconPlus class="svg-icon" />
+      <span class="text-button-label">Add reference</span>
     </button>
     <span class="count">{entries.length} entries</span>
   </div>
@@ -99,38 +104,44 @@
             {#each columns as col (col.key)}
               {@const value = entry[col.key]}
               <td>
-                {#if col.key === 'citekey'}
-                  <span>{value}</span>
-                  <button
-                    title="Copy citation"
-                    aria-label="Copy citation"
-                    onclick={() => copyCitekey(value)}
-                  >
-                    ©
-                  </button>
-                {:else if col.key === 'files'}
-                  {#if Array.isArray(value) && value.length > 0}
-                    <ul>
-                      {#each value as file}
-                        <li>{file}</li>
-                      {/each}
-                    </ul>
+                <div>
+                  {#if col.key === 'citekey'}
+                    <span>{value}</span>
+                    <button
+                      title="Copy citation"
+                      aria-label="Copy citation"
+                      onclick={() => copyCitekey(value)}
+                      class="clickable-icon"
+                    >
+                      <IconClipboardCopy class="svg-icon" />
+                    </button>
+                  {:else if col.key === 'files'}
+                    {#if Array.isArray(value) && value.length > 0}
+                      <ul>
+                        {#each value as file}
+                          <li>{file}</li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  {:else if col.key === 'DOI' && value}
+                    <a href="https://doi.org/{value}">{value}</a>
+                  {:else if col.key === 'URL' && value}
+                    <a href={value}>{value}</a>
+                  {:else if value}
+                    {value}
                   {/if}
-                {:else if col.key === 'DOI' && value}
-                  <a href="https://doi.org/{value}">{value}</a>
-                {:else if col.key === 'URL' && value}
-                  <a href={value}>{value}</a>
-                {:else if value}
-                  {value}
-                {/if}
+                </div>
               </td>
             {/each}
             <td class="actions-col">
               <button
                 title="Remove reference"
                 aria-label="Remove reference"
-                onclick={() => handleRemove(entry.id)}>×</button
+                onclick={() => handleRemove(entry.id)}
+                class="clickable-icon"
               >
+                <IconTrash class="svg-icon" />
+              </button>
             </td>
           </tr>
         {:else}
@@ -160,16 +171,6 @@
     padding: var(--size-4-2) var(--size-4-3);
     border-bottom: 1px solid var(--background-modifier-border);
     flex-shrink: 0;
-  }
-
-  .add-button {
-    display: flex;
-    align-items: center;
-    gap: var(--size-4-1);
-  }
-  .add-button .icon {
-    font-size: 1.1em;
-    line-height: 1;
   }
 
   .count {
@@ -220,53 +221,17 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  td ul {
-    margin: 0;
-    padding-left: var(--size-4-3);
-    list-style: square;
-  }
-  td li {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  td a {
-    color: var(--text-accent);
-    text-decoration: none;
-  }
-  td a:hover {
-    text-decoration: underline;
+  td div {
+    --icon-size: 1lh;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
   }
 
   .actions-col {
     width: 2.2em;
     text-align: center;
     white-space: nowrap;
-  }
-
-  button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.6em;
-    height: 1.6em;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-s);
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 1.1em;
-    line-height: 1;
-    cursor: pointer;
-    transition:
-      opacity 0.1s,
-      color 0.1s,
-      background 0.1s;
-  }
-  button:hover {
-    color: var(--text-error);
-    background-color: var(--background-modifier-error-hover);
   }
 
   .empty {

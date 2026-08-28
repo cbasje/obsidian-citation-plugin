@@ -2,12 +2,17 @@ import esbuild from 'esbuild';
 import process from 'process';
 import { builtinModules } from 'node:module';
 import { fileURLToPath } from 'node:url'; import esbuildSvelte from 'esbuild-svelte';
+import LightningCSS from 'unplugin-lightningcss/esbuild';
+import browserslist from 'browserslist';
+import { browserslistToTargets, Features } from 'lightningcss';
 import { sveltePreprocess } from 'svelte-preprocess';
 
 const prod = process.argv[2] === 'production';
 const stubPath = fileURLToPath(new URL('./stub-fetch.js', import.meta.url));
 
 const nodePrefixed = builtinModules.map((m) => `node:${m}`);
+
+const targets = browserslistToTargets(browserslist('>= 0.25%'));
 
 const context = await esbuild.context({
   entryPoints: ['src/main.ts'],
@@ -51,6 +56,12 @@ const context = await esbuild.context({
     '.xml': 'text',
   },
   plugins: [
+    LightningCSS({
+      options: {
+        targets,
+        include: Features.Nesting
+      }
+    }),
     esbuildSvelte({
       compilerOptions: { css: 'injected' },
       preprocess: sveltePreprocess(),
@@ -58,9 +69,13 @@ const context = await esbuild.context({
   ]
 });
 
-if (prod) {
-  await context.rebuild();
-  process.exit(0);
-} else {
-  await context.watch();
+try {
+  if (prod) {
+    await context.rebuild();
+    process.exit(0);
+  } else {
+    await context.watch();
+  }
+} catch {
+  process.exit(1);
 }
