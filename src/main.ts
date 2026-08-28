@@ -133,6 +133,29 @@ export default class CitationPlugin extends Plugin {
       );
     }
 
+    // Customize the file menu
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu, file, source, leaf) => {
+        if (source === 'link-context-menu') return;
+
+        // Add a menu item to the folder context menu to create a board
+        if (file instanceof TFolder) {
+          menu.addItem((item) => {
+            item
+              .setSection('action-primary')
+              .setTitle('New citation database')
+              .setIcon(CIT_ICON)
+              .onClick(() => this.newFile(file));
+          });
+          return;
+        }
+      }),
+    );
+
+    this.addRibbonIcon(CIT_ICON, 'Create new citation database', () => {
+      this.newFile();
+    });
+
     this.addCommand({
       id: 'open-literature-note',
       name: 'Open literature note',
@@ -194,6 +217,26 @@ export default class CitationPlugin extends Plugin {
 
     this.registerExtensions(fileTypes as unknown as string[], CIT_VIEW_TYPE);
     this.registerView(CIT_VIEW_TYPE, (leaf) => new EditorView(leaf, this));
+  }
+
+  async newFile(folder?: TFolder) {
+    const targetFolder = folder
+      ? folder
+      : this.app.fileManager.getNewFileParent(
+        this.app.workspace.getActiveFile()?.path || '',
+      );
+
+    try {
+      const targetPath = targetFolder.path + '/Untitled.bib';
+      const createdFile = await this.app.vault.create(targetPath, '');
+
+      await this.app.workspace.getLeaf().setViewState({
+        type: CIT_VIEW_TYPE,
+        state: { file: createdFile.path },
+      });
+    } catch (e) {
+      console.error('Error creating new citation database:', e);
+    }
   }
 
   /**
