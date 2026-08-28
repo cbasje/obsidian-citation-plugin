@@ -13,14 +13,8 @@ import {
 } from './types';
 import { CSL_STYLES, type CslStyleId } from './csl/assets';
 
-const CITATION_DATABASE_FORMAT_LABELS: Record<DatabaseType, string> = {
-  'csl-json': 'CSL-JSON',
-  biblatex: 'BibLaTeX',
-};
-
 export class CitationsPluginSettings {
   public citationExportPath: string = '';
-  citationExportFormat: DatabaseType = 'csl-json';
 
   literatureNoteTitleTemplate = '@{{citekey}}';
   literatureNoteFolder = 'Reading notes';
@@ -94,29 +88,6 @@ export class CitationSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Citation plugin settings' });
 
-    new Setting(containerEl)
-      .setName('Citation database format')
-      .addDropdown((component) =>
-        this.buildValueInput(
-          component.addOptions(CITATION_DATABASE_FORMAT_LABELS),
-          'citationExportFormat',
-          () => {
-            this.checkCitationExportPath(
-              this.plugin.settings.citationExportPath,
-            ).then((success) => {
-              if (success) {
-                this.citationPathSuccessEl?.addClass('d-none');
-                this.citationPathLoadingEl?.removeClass('d-none');
-
-                this.plugin.loadLibrary().then(() => {
-                  this.citationPathLoadingEl?.addClass('d-none');
-                  this.showCitationExportPathSuccess();
-                });
-              }
-            });
-          },
-        ),
-      );
 
     // NB: we force reload of the library on path change.
     new Setting(containerEl)

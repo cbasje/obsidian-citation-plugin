@@ -9,7 +9,7 @@ import { CiteprocEngine } from '../csl/engine';
 function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
   const biblatexPath = path.join(__dirname, filename);
   const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return deserializeEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
+  return deserializeEntries(biblatex, 'bib') as EntryDataBibLaTeX[];
 }
 
 describe('Citation.js BibLaTeX → CSL conversion', () => {

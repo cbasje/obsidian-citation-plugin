@@ -14,11 +14,12 @@ import CitationEvents from './events';
 import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
 import {
-  type DatabaseType,
   fileTypes,
   type IIndexable,
   Library,
   CIT_VIEW_TYPE,
+  CIT_ICON,
+  getFileType,
 } from './types';
 import { deserializeEntries } from './serializer';
 import { DISALLOWED_FILENAME_CHARACTERS_RE } from './util';
@@ -64,7 +65,6 @@ export default class CitationPlugin extends Plugin {
 
     const toLoad = [
       'citationExportPath',
-      'citationExportFormat',
       'literatureNoteTitleTemplate',
       'literatureNoteFolder',
       'literatureNoteContentTemplate',
@@ -225,19 +225,17 @@ export default class CitationPlugin extends Plugin {
     this.library = null;
 
     try {
-      const raw = await this.app.vault.adapter.read(
+      const file = this.app.vault.getFileByPath(
         this.settings.citationExportPath,
       );
+      const extension = getFileType(file);
+      const raw = await this.app.vault.cachedRead(file);
 
-      const entries = deserializeEntries(
-        raw,
-        this.settings.citationExportFormat as DatabaseType,
-      );
+      const entries = deserializeEntries(raw, extension);
 
-      this.library = new Library(
-        entries,
-        this.settings.citationExportFormat,
-        this.getLibraryDir(),
+      this.library = new Library(entries, extension, this.getLibraryDir());
+      this.paths = Object.values(entries).map((entry) =>
+        this.getPathForCitekey(this.getLibraryDir(), entry.id),
       );
       console.debug(
         `Citation plugin: successfully loaded library with ${this.library.size} entries.`,
@@ -288,11 +286,17 @@ export default class CitationPlugin extends Plugin {
     return unsafeTitle.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_');
   }
 
-  getPathForCitekey(citekey: string): string {
+  getPathForCitekey(basePath: string, citekey: string): string {
     const title = this.getTitleForCitekey(citekey);
-    const folder = this.settings.literatureNoteFolder || '';
-    const sep = folder && !folder.endsWith('/') ? '/' : '';
-    return normalizePath(`${folder}${sep}${title}.md`);
+    const notesFolder = this.settings.literatureNoteFolder || 'Reading notes';
+    const notesSep = notesFolder && !notesFolder.endsWith('/') ? '/' : '';
+
+    const parentFolder = basePath;
+    const parentSep = parentFolder && !parentFolder.endsWith('/') ? '/' : '';
+
+    return normalizePath(
+      `${parentFolder}${parentSep}${notesFolder}${notesSep}${title}.md`,
+    );
   }
 
   getInitialContentForCitekey(citekey: string): string {
@@ -305,8 +309,11 @@ export default class CitationPlugin extends Plugin {
    * Run a case-insensitive search for the literature note file corresponding to
    * the given citekey. If no corresponding file is found, create one.
    */
-  async getOrCreateLiteratureNoteFile(citekey: string): Promise<TFile> {
-    const notePath = this.getPathForCitekey(citekey);
+  async getOrCreateLiteratureNoteFile(
+    basePath: string,
+    citekey: string,
+  ): Promise<TFile> {
+    const notePath = this.getPathForCitekey(basePath, citekey);
 
     let file = this.app.vault.getAbstractFileByPath(notePath);
     if (file == null) {
@@ -335,7 +342,10 @@ export default class CitationPlugin extends Plugin {
   }
 
   async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
-    this.getOrCreateLiteratureNoteFile(citekey)
+    const source = this.app.vault.getFileByPath(
+      this.settings.citationExportPath,
+    );
+    this.getOrCreateLiteratureNoteFile(source.parent.path, citekey)
       .then((file: TFile) => {
         this.app.workspace.getLeaf(newPane).openFile(file);
       })

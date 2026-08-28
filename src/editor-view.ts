@@ -1,18 +1,13 @@
-import {
-  FileSystemAdapter,
-  TextFileView,
-  TFile,
-  WorkspaceLeaf,
-  type IconName,
-} from 'obsidian';
+import { TextFileView, TFile, WorkspaceLeaf, type IconName } from 'obsidian';
 import CitationPlugin from './main';
 import {
-  type DatabaseType,
   type EntryData,
   type EntryDataBibLaTeX,
   type EntryDataCSL,
   CIT_VIEW_TYPE,
   type FileType,
+  CIT_ICON,
+  getFileType,
 } from './types';
 import { deserializeEntries, serializeEntries } from './serializer';
 import { fetchEntryById, generateCiteKey, type IdType } from './fetcher';
@@ -23,8 +18,8 @@ import { mount, unmount } from 'svelte';
 export class EditorView extends TextFileView {
   /** Raw text last loaded from disk (fallback when serialization fails). */
   private value = '';
-  /** Database type inferred from the file extension. */
-  private dbType: DatabaseType | undefined;
+  /** The file extension. */
+  private extension: FileType | undefined;
   /** True only after entries have been successfully loaded into the table. */
   private loaded = false;
   table: ReturnType<typeof Table> | undefined;
@@ -37,7 +32,7 @@ export class EditorView extends TextFileView {
   }
 
   getIcon(): IconName {
-    return 'quote';
+    return CIT_ICON;
   }
 
   getViewType(): string {
@@ -61,7 +56,7 @@ export class EditorView extends TextFileView {
 
   clear(): void {
     console.log('clear');
-    this.dbType = undefined;
+    this.extension = undefined;
     this.loaded = false;
     this.value = '';
     this.table?.set([]);
@@ -77,31 +72,30 @@ export class EditorView extends TextFileView {
 
   async onLoadFile(file: TFile) {
     console.log('onLoadFile');
-    const extension = this.getFileType();
-    const dbType = this.detectDatabaseType(extension);
-    if (!dbType) {
+    const extension = getFileType(this.file);
+    if (!extension) {
       this.renderError(`Unsupported file extension: ".${extension}".`);
       return;
     }
 
-    const basePath = this.file?.parent?.path;
-    const vaultPath =
-      this.app.vault.adapter instanceof FileSystemAdapter
-        ? this.app.vault.adapter.getBasePath()
-        : undefined;
-
     this.table = mount(Table, {
       target: this.contentEl,
       props: {
-        dbType,
-        basePath,
-        vaultPath,
+        app: this.app,
+        file: this.file,
+        getNotePath: (citekey: string) => {
+          return this.plugin.getPathForCitekey(this.file.parent.path, citekey);
+        },
+        onAdd: () => {
+          new AddReferenceModal(this.app, (idType, id) =>
+            this.fetchAndAddEntry(idType, id),
+          ).open();
+        },
+        onChange: () => {
+          this.requestSave();
+        },
       },
     });
-    this.table.onChange(() => {
-      this.requestSave();
-    });
-    this.table.onAdd(() => this.openAddReferenceModal());
 
     await super.onLoadFile(file);
   }
@@ -117,33 +111,17 @@ export class EditorView extends TextFileView {
     await super.onClose();
   }
 
-  private getFileType(): FileType {
-    return (this.file?.extension || '').toLowerCase() as FileType;
-  }
-
-  private detectDatabaseType(extension: FileType): DatabaseType | undefined {
-    switch (extension) {
-      case 'bib':
-        return 'biblatex';
-      case 'json':
-        return 'csl-json';
-      default:
-        return undefined;
-    }
-  }
-
   private setValue(data: string) {
     console.log('setValue');
-    const extension = this.getFileType();
-    const dbType = this.detectDatabaseType(extension);
-    if (!dbType) {
+    const extension = getFileType(this.file);
+    if (!extension) {
       this.renderError(`Unsupported file extension: ".${extension}".`);
       return;
     }
 
     let entries: EntryData[];
     try {
-      entries = deserializeEntries(data, dbType);
+      entries = deserializeEntries(data, extension);
     } catch (e) {
       console.error('Citation plugin: failed to parse file', e);
       this.renderError(
@@ -152,7 +130,7 @@ export class EditorView extends TextFileView {
       return;
     }
 
-    this.dbType = dbType;
+    this.extension = extension;
     this.table?.set(entries);
     this.value = data;
     this.loaded = true;
@@ -160,27 +138,21 @@ export class EditorView extends TextFileView {
 
   private getValue() {
     console.log('getValue');
-    if (!this.loaded || !this.dbType || !this.table) {
+    if (!this.loaded || !this.extension || !this.table) {
       return this.value;
     }
 
     try {
-      return serializeEntries(this.table.get(), this.dbType);
+      return serializeEntries(this.table.get(), this.extension);
     } catch (e) {
       console.error('Citation plugin: failed to serialize entries', e);
       return this.value;
     }
   }
 
-  private openAddReferenceModal() {
-    if (!this.dbType) return;
-    new AddReferenceModal(this.app, (idType, id) =>
-      this.fetchAndAddEntry(idType, id),
-    ).open();
-  }
-
   private async fetchAndAddEntry(idType: IdType, id: string) {
-    if (!this.dbType || !this.table) return;
+    if (!this.extension || !this.table) return;
+
     const fetched = await fetchEntryById(idType, id);
     if (fetched.length === 0) return;
 
@@ -202,7 +174,7 @@ export class EditorView extends TextFileView {
    * CSL-derived fallback rather than crashing on missing raw props.
    */
   private adaptEntry(entry: EntryDataCSL): EntryData {
-    if (this.dbType === 'biblatex') {
+    if (this.extension === 'bib') {
       return { ...entry, _biblatex: undefined } as EntryDataBibLaTeX;
     }
     return entry;

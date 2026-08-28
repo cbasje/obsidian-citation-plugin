@@ -1,3 +1,5 @@
+import type { TFile } from "obsidian";
+
 // Trick: allow string indexing onto object properties
 export interface IIndexable {
   [key: string]: any;
@@ -5,11 +7,16 @@ export interface IIndexable {
 
 export const fileTypes = ['bib', 'json'] as const;
 export type FileType = (typeof fileTypes)[number];
-export const CIT_VIEW_TYPE = 'citation-manager';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const databaseTypes = ['csl-json', 'biblatex'] as const;
-export type DatabaseType = (typeof databaseTypes)[number];
+export function getFileType(file: TFile | undefined): FileType | undefined {
+  const extension = (file?.extension || '').toLowerCase();
+  // @ts-expect-error This makes sense
+  if (fileTypes.includes(extension)) return extension as FileType;
+  return undefined;
+}
+
+export const CIT_VIEW_TYPE = 'citation-manager';
+export const CIT_ICON = 'quote';
 
 export const TEMPLATE_VARIABLES = {
   citekey: 'Unique citekey',
@@ -82,11 +89,11 @@ export interface BibLaTeXRawEntry {
 export function getEntryMetadata(
   citekey: string,
   entry: EntryData,
-  databaseType: DatabaseType,
+  extension: FileType,
   basePath?: string,
   vaultPath?: string,
 ): EntryMetadata {
-  return databaseType === 'csl-json'
+  return extension === 'json'
     ? getCSLMetadata(citekey, entry as EntryDataCSL)
     : getBibLaTeXMetadata(
       citekey,
@@ -301,7 +308,7 @@ export class Library {
 
   constructor(
     entries: EntryData[],
-    databaseType: DatabaseType,
+    extension: FileType,
     basePath?: string,
     vaultPath?: string,
   ) {
@@ -311,7 +318,7 @@ export class Library {
       this.entries[id] = getEntryMetadata(
         id,
         entry,
-        databaseType,
+        extension,
         basePath,
         vaultPath,
       );

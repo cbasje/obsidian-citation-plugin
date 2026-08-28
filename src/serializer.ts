@@ -1,10 +1,10 @@
 import { Cite, plugins, type CSL } from '@citation-js/core';
 import '@citation-js/plugin-bibtex';
 import type {
-  DatabaseType,
   EntryData,
   EntryDataBibLaTeX,
   EntryDataCSL,
+  FileType,
 } from './types';
 import { Temporal } from 'temporal-polyfill';
 
@@ -23,15 +23,15 @@ import { Temporal } from 'temporal-polyfill';
  */
 export function deserializeEntries(
   databaseRaw: string,
-  databaseType: DatabaseType,
-): EntryData[] {
-  if (databaseType === 'csl-json') {
+  extension: FileType,
+): EntryDataCSL[] {
+  if (extension === 'json') {
     const parsed = parseCslJson(databaseRaw);
     validateCslJsonEntries(parsed);
     return parsed;
   }
 
-  if (databaseType === 'biblatex') {
+  if (extension === 'bib') {
     let cslEntries: CSL[];
     try {
       const cite = new Cite(databaseRaw);
@@ -70,7 +70,7 @@ export function deserializeEntries(
     });
   }
 
-  throw new Error(`Unsupported database type: ${databaseType}.`);
+  throw new Error(`Unsupported file extension: ${extension}.`);
 }
 
 /**
@@ -128,9 +128,9 @@ function validateCslJsonEntries(entries: EntryDataCSL[]): void {
  */
 export function serializeEntries(
   entries: EntryData[],
-  databaseType: DatabaseType,
+  extension: FileType,
 ): string {
-  if (databaseType === 'csl-json') {
+  if (extension === 'json') {
     return serializeCslJson(entries as EntryDataCSL[]);
   }
   return serializeBibLaTeX(entries as EntryDataBibLaTeX[]);

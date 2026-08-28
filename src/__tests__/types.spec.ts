@@ -128,11 +128,11 @@ function matchLibraryRender(
 function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
   const biblatexPath = path.join(__dirname, filename);
   const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return deserializeEntries(biblatex, 'biblatex') as EntryDataBibLaTeX[];
+  return deserializeEntries(biblatex, 'bib') as EntryDataBibLaTeX[];
 }
 
 function loadBibLaTeXLibrary(entries: EntryDataBibLaTeX[]): Library {
-  return new Library(entries, 'biblatex');
+  return new Library(entries, 'bib');
 }
 
 const renderAdvancedTemplate = (
@@ -209,7 +209,7 @@ describe('csl library', () => {
   beforeEach(() => {
     const cslPath = path.join(__dirname, 'library.json');
     const csl = fs.readFileSync(cslPath, 'utf-8');
-    entries = deserializeEntries(csl, 'csl-json') as EntryDataCSL[];
+    entries = deserializeEntries(csl, 'json') as EntryDataCSL[];
   });
 
   test('loads', () => {
@@ -217,7 +217,7 @@ describe('csl library', () => {
   });
 
   function loadLibrary(): Library {
-    return new Library(entries, 'csl-json');
+    return new Library(entries, 'json');
   }
 
   test('can support library', () => {
