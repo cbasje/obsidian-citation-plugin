@@ -133,7 +133,7 @@ export class EditorView extends TextFileView {
   }
 
   private setValue(data: string) {
-    console.log('setValue', data);
+    console.log('setValue');
     const extension = this.getFileType();
     const dbType = this.detectDatabaseType(extension);
     if (!dbType) {

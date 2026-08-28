@@ -6,6 +6,7 @@ import type {
   EntryDataBibLaTeX,
   EntryDataCSL,
 } from './types';
+import { Temporal } from 'temporal-polyfill';
 
 /**
  * Parse raw database text into reference entries.
@@ -196,11 +197,19 @@ function cslToBibLatexProperties(entry: EntryDataCSL): Record<string, string> {
 
   if (entry.title) props.title = entry.title;
   if (entry.author) props.author = formatAuthor(entry.author);
+  if (entry.month) props.month = entry.month;
+  if (entry.year) props.year = entry.year;
   if (entry.issued?.['date-parts']?.[0]) {
     const parts = entry.issued['date-parts'][0];
-    if (parts.length === 1) props.year = String(parts[0]);
-    else if (parts.length >= 3) props.date = parts.join('-');
-    else props.date = parts.join('-');
+    if (parts.length === 1) {
+      props.year = String(parts[0]);
+    } else {
+      props.date = Temporal.PlainDate.from({
+        year: parts.at(0),
+        month: parts.at(1),
+        day: parts.at(2),
+      }).toString();
+    }
   }
   if (entry['container-title']) props.journaltitle = entry['container-title'];
   if (entry.DOI) props.doi = entry.DOI;
@@ -211,6 +220,7 @@ function cslToBibLatexProperties(entry: EntryDataCSL): Record<string, string> {
   if (entry.publisher) props.publisher = entry.publisher;
   if (entry['publisher-place']) props.location = entry['publisher-place'];
   if (entry.abstract) props.abstract = entry.abstract;
+  if (entry.language) props.language = entry.language;
 
   return props;
 }

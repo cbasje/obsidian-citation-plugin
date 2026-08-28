@@ -69,7 +69,3 @@ declare module '@citation-js/plugin-pubmed' {
 declare module '@citation-js/plugin-orcid' {
   // Side-effect import: registers ORCID input format with @citation-js/core.
 }
-
-declare module '@citation-js/plugin-url' {
-  // Side-effect import: registers URL input format with @citation-js/core.
-}

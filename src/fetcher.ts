@@ -1,5 +1,8 @@
 import { Cite, type CSL } from '@citation-js/core';
 import type { EntryData, EntryDataCSL, Author } from './types';
+import { Temporal } from 'temporal-polyfill';
+import Defuddle from 'defuddle';
+import { requestUrl } from 'obsidian';
 
 // Plugin imports. fetch-ponyfill (used internally by @citation-js/core for
 // async HTTP) is aliased in esbuild.config.mjs to stub-fetch-ponyfill.js,
@@ -8,7 +11,6 @@ import '@citation-js/plugin-doi';
 import '@citation-js/plugin-isbn';
 import '@citation-js/plugin-pubmed';
 import '@citation-js/plugin-orcid';
-import '@citation-js/plugin-url';
 
 export type IdType = 'DOI' | 'ISBN' | 'PubMed' | 'ORCID' | 'URL';
 
@@ -66,11 +68,16 @@ export async function fetchEntryById(
   idType: IdType,
   id: string,
 ): Promise<EntryData[]> {
-  const query = buildQuery(idType, id);
   let cslEntries: CSL[];
   try {
-    const cite = await Cite.async(query);
-    cslEntries = cite.data;
+    if (idType === 'URL') {
+      const data = await fetchURL(id);
+      cslEntries = [data];
+    } else {
+      const query = buildQuery(idType, id);
+      const cite = await Cite.async(query);
+      cslEntries = cite.data;
+    }
   } catch (err) {
     throw new Error(
       `Could not fetch ${idType} "${id}". ` +
@@ -87,6 +94,42 @@ export async function fetchEntryById(
     const { _graph, ...cleanCsl } = csl as Record<string, unknown>;
     return cleanCsl as unknown as EntryDataCSL;
   });
+}
+
+async function fetchURL(id: string): Promise<Omit<EntryDataCSL, 'id'>> {
+  const response = requestUrl({
+    url: id,
+    throw: false,
+  });
+  const html = await response.text;
+  const document = new DOMParser().parseFromString(html, 'text/html');
+  const defuddle = new Defuddle(document);
+  const result = defuddle.parse();
+
+  const publishTime = result.published
+    ? Temporal.PlainDateTime.from(result.published)
+    : undefined;
+  const url =
+    result.metaTags.find(
+      (tag) => tag.name === 'og:url' || tag.property === 'og:url',
+    ).content ?? id;
+  return {
+    type: 'webpage',
+    author: [{ literal: result.site }],
+    title: result.title,
+    URL: url,
+    abstract: result.description,
+    language: result.language,
+    issued: publishTime
+      ? {
+        'date-parts': [
+          [publishTime.year, publishTime.month, publishTime.day],
+        ],
+      }
+      : undefined,
+    month: publishTime?.month,
+    year: publishTime?.year,
+  };
 }
 
 /**

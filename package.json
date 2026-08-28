@@ -50,9 +50,10 @@
     "@citation-js/plugin-isbn": "^0.4.0",
     "@citation-js/plugin-orcid": "^0.3.1",
     "@citation-js/plugin-pubmed": "^0.3.0",
-    "@citation-js/plugin-url": "^0.7.21",
     "citeproc": "^2.4.63",
-    "handlebars": "^4.7.9"
+    "defuddle": "^0.19.3",
+    "handlebars": "^4.7.9",
+    "temporal-polyfill": "^1.0.4"
   },
   "lint-staged": {
     "*.ts": "eslint --fix",
