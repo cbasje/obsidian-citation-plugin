@@ -287,6 +287,9 @@ export class AddReferenceModal extends Modal {
       .addText((text) => {
         text.inputEl.addClass('citation-add-id-input');
         text.onChange((value) => {
+          if (value.startsWith('http://') || value.startsWith('https://')) {
+            this.idType = 'URL';
+          }
           this.idValue = value;
           this.updateSubmitState();
         });

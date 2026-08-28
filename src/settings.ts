@@ -6,11 +6,7 @@ import {
   Setting,
 } from 'obsidian';
 import CitationPlugin from './main';
-import {
-  type IIndexable,
-  type DatabaseType,
-  TEMPLATE_VARIABLES,
-} from './types';
+import { type IIndexable, TEMPLATE_VARIABLES, fileTypes } from './types';
 import { CSL_STYLES, type CslStyleId } from './csl/assets';
 
 export class CitationsPluginSettings {
@@ -88,18 +84,26 @@ export class CitationSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Citation plugin settings' });
 
+    const supportedFiles = this.app.vault
+      .getFiles()
+      // @ts-expect-error This is fine
+      .filter((f) => fileTypes.includes(f.extension))
+      .reduce((obj, f) => {
+        obj[f.path] = f.path;
+        return obj;
+      }, {});
 
-    // NB: we force reload of the library on path change.
+    // NB: we force reload the library on path change.
     new Setting(containerEl)
-      .setName('Citation database path')
+      .setName('Default citation database')
       .setDesc(
-        'Path to citation library exported by your reference manager, ' +
-        'relative to the vault root folder. ' +
+        'Path to citation library exported by your reference manager. ' +
+        'Only files inside the vault are possible. ' +
         'Citations will be automatically reloaded whenever this file updates.',
       )
-      .addText((input) =>
+      .addDropdown((component) =>
         this.buildValueInput(
-          input.setPlaceholder('path/to/export.bib'),
+          component.addOptions(supportedFiles),
           'citationExportPath',
           (value) => {
             this.checkCitationExportPath(value).then((success) => {
@@ -124,13 +128,6 @@ export class CitationSettingTab extends PluginSettingTab {
       cls: 'zoteroSettingCitationPathSuccess d-none',
       text: 'Loaded library with {{n}} references.',
     });
-
-    new Setting(containerEl)
-      .setName('Literature note folder')
-      .addText((input) => this.buildValueInput(input, 'literatureNoteFolder'))
-      .setDesc(
-        'Save literature note files in this folder within your vault. If empty, notes will be stored in the root directory of the vault.',
-      );
 
     containerEl.createEl('h3', { text: 'Template settings' });
     const templateInstructionsEl = containerEl.createEl('p');
@@ -187,16 +184,23 @@ export class CitationSettingTab extends PluginSettingTab {
       createSpan({ text: " for information on this object's structure." }),
     );
 
-    containerEl.createEl('h3', { text: 'Literature note templates' });
+    containerEl.createEl('h3', { text: 'Literature notes' });
 
     new Setting(containerEl)
-      .setName('Literature note title template')
+      .setName('Subfolder name')
+      .addText((input) => this.buildValueInput(input, 'literatureNoteFolder'))
+      .setDesc(
+        'If your citation database is under "vault/folder", and you set subfolder name to "Notes", the literature notes will be saved to "vault/folder/Notes".',
+      );
+
+    new Setting(containerEl)
+      .setName('Title template')
       .addText((input) =>
         this.buildValueInput(input, 'literatureNoteTitleTemplate'),
       );
 
     new Setting(containerEl)
-      .setName('Literature note content template')
+      .setName('Content template')
       .addTextArea((input) =>
         this.buildValueInput(input, 'literatureNoteContentTemplate'),
       );

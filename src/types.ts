@@ -361,6 +361,7 @@ export type EntryData = EntryDataCSL | EntryDataBibLaTeX;
 export interface EntryDataCSL {
   id: string;
   type: string;
+  citekey?: string;
 
   abstract?: string;
   author?: Author[];

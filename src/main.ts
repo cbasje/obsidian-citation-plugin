@@ -58,8 +58,6 @@ export default class CitationPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = new CitationsPluginSettings();
-
     const loadedSettings = await this.loadData();
     if (!loadedSettings) return;
 
@@ -156,7 +154,7 @@ export default class CitationPlugin extends Plugin {
 
     this.addCommand({
       id: 'insert-markdown-citation',
-      name: 'Insert Markdown citation',
+      name: 'Insert citation',
       callback: () => {
         const modal = new InsertCitationModal(this.app, this);
         modal.open();
@@ -165,7 +163,7 @@ export default class CitationPlugin extends Plugin {
 
     this.addCommand({
       id: 'insert-references-block',
-      name: 'Insert references code block',
+      name: 'Insert references block',
       callback: () => {
         this.insertReferencesBlock();
       },

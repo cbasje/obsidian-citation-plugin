@@ -43,6 +43,14 @@ export const ID_TYPES: { value: IdType; label: string; placeholder: string }[] =
     },
   ];
 
+function buildDateParts(input: Temporal.PlainDate | undefined) {
+  return input
+    ? {
+      'date-parts': [[input.year, input.month, input.day]],
+    }
+    : undefined;
+}
+
 function buildQuery(idType: IdType, id: string): string {
   const trimmed = id.trim();
   switch (idType) {
@@ -106,29 +114,24 @@ async function fetchURL(id: string): Promise<Omit<EntryDataCSL, 'id'>> {
   const defuddle = new Defuddle(document);
   const result = defuddle.parse();
 
-  const publishTime = result.published
-    ? Temporal.PlainDateTime.from(result.published)
+  const publishDate = result.published
+    ? Temporal.PlainDateTime.from(result.published)?.toPlainDate()
     : undefined;
   const url =
     result.metaTags.find(
       (tag) => tag.name === 'og:url' || tag.property === 'og:url',
-    ).content ?? id;
+    )?.content ?? id;
   return {
     type: 'webpage',
     author: [{ literal: result.site }],
     title: result.title,
     URL: url,
     abstract: result.description,
-    language: result.language,
-    issued: publishTime
-      ? {
-        'date-parts': [
-          [publishTime.year, publishTime.month, publishTime.day],
-        ],
-      }
-      : undefined,
-    month: publishTime?.month,
-    year: publishTime?.year,
+    language: result.language?.split('-').at(0),
+    issued: buildDateParts(publishDate),
+    accessed: buildDateParts(Temporal.Now.plainDateISO()),
+    month: publishDate?.month,
+    year: publishDate?.year,
   };
 }
 
