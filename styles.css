@@ -113,44 +113,6 @@
   min-height: 10em;
 }
 
-/** CSL bibliography rendering (citeproc-js output) **/
-
-.csl-bibliography {
-  line-height: 1.5;
-}
-
-.csl-bibliography .csl-entry {
-  margin-bottom: 0.5em;
-  text-indent: -2em;
-  padding-left: 2em;
-  hanging-punct: false;
-}
-
-/* Numbered styles (e.g. IEEE) use a left margin + right inline layout */
-.csl-bibliography .csl-left-margin {
-  display: inline-block;
-  min-width: 2em;
-  text-align: right;
-}
-
-.csl-bibliography .csl-right-inline {
-  display: inline;
-  margin-left: 0.5em;
-}
-
-.csl-bibliography .csl-block {
-  display: block;
-}
-
-.csl-bibliography .csl-indent {
-  margin-left: 2em;
-}
-
-.csl-placeholder {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
 /** CSL inline citations (rendered in reading view) **/
 
 .csl-inline .csl-block {

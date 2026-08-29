@@ -9,34 +9,48 @@ import {
 } from '../types';
 import { deserializeEntries, serializeEntries } from './serializer';
 import type CitationPlugin from '../main';
-import { CiteprocEngine } from '../csl/engine';
-import { BUNDLED_LOCALE_EN_US } from '../csl/assets';
+import { plugins } from '@citation-js/core';
+import CSL from 'citeproc';
+import type { Citation, CitationItem, CiteprocSys } from 'citeproc';
+import type { CiteOptions } from '../csl/assets';
+import { SvelteMap } from 'svelte/reactivity';
+import '@citation-js/plugin-csl';
 
 export class CitationDatabase {
-  readonly entries = new Map<string, EntryDataCSL>();
-  readonly entriesRich = new Map<string, EntryData | EntryMetadata>();
+  readonly entries = new SvelteMap<string, EntryDataCSL>();
+  readonly entriesRich = new SvelteMap<string, EntryData | EntryMetadata>();
 
-  public file: TFile;
-  readonly citeEngine = new CiteprocEngine(this);
+  public file: TFile | undefined;
+  public path: string | undefined;
   private vaultPath: string | undefined;
 
   public isLoading = false;
 
+  constructor(file: string, plugin?: CitationPlugin);
+  constructor(file: TFile, plugin?: CitationPlugin);
   constructor(
+    file: TFile | string,
     private plugin?: CitationPlugin,
-    file?: TFile,
   ) {
-    this.file = file ?? plugin?.getDefaultDatabase();
-    console.debug(
-      `Citation manager: Creating database for '${this.file?.path}'`,
-    );
+    if (typeof file === 'string') {
+      this.path = file;
+    } else {
+      this.file = file;
+      this.path = file?.path;
+    }
+    console.debug(`Citation manager: Creating database for '${this.path}'`);
 
-    // @ts-expect-error
+    // @ts-expect-error There is a optional parameter
     this.vaultPath = plugin?.app.vault.adapter.getBasePath?.();
   }
 
   async load(_raw?: string) {
-    if (!this.file || this.isLoading) return;
+    if (this.isLoading) return;
+
+    if (!this.file && this.path) {
+      this.file = this.plugin.app.vault.getFileByPath(this.path);
+    }
+    if (!this.file) return;
 
     console.debug('Citation manager: (Re)loading database');
     this.plugin?.events.trigger('library-load-start');
@@ -49,25 +63,21 @@ export class CitationDatabase {
       } else {
         raw = await this.plugin?.app.vault.read(this.file);
       }
-      console.debug('RAW', raw);
       const entries = deserializeEntries(raw, this.type);
 
       this.clear();
       for (const entry of entries) {
         const id = (entry as EntryDataCSL).id;
-        this.entries.set(id, entry);
+        this.entries.set(id, { citekey: id, ...entry });
         this.entriesRich.set(
           id,
           getEntryMetadata(id, entry, this.type, this.dir, this.vaultPath),
         );
       }
 
-      // (Re)build the cite engine so bibliography rendering reflects the new data.
-      await this.loadCiteEngine();
-
       this.plugin?.events.trigger('library-load-complete');
       console.debug(
-        `Citation manager: successfully loaded database with ${this.size} entries.`,
+        `Citation manager: successfully loaded database with ${this.entries.size} entries.`,
       );
     } catch (e) {
       console.error(e);
@@ -81,24 +91,14 @@ export class CitationDatabase {
     return this.file?.parent?.path;
   }
 
-  get size(): number {
-    return this.entries.size;
+  get ids() {
+    return Array.from(this.entries.keys());
   }
 
-  get ids(): Set<string> {
-    return new Set(this.entries.keys());
-  }
-
-  get paths(): Set<string> {
-    return new Set(
-      Array.from(this.entries.keys()).map((id) =>
-        this.plugin.getPathForCitekey(this.dir, id),
-      ),
+  get paths() {
+    return Array.from(this.entries.keys()).map((id) =>
+      this.plugin.getPathForCitekey(this.dir, id),
     );
-  }
-
-  has(id: string): boolean {
-    return this.entries.has(id);
   }
 
   retrieve(id: string): EntryDataCSL | undefined {
@@ -112,6 +112,7 @@ export class CitationDatabase {
     this.entries.set(entry.id, entry);
     this.entriesRich.set(entry.id, entry);
   }
+
   delete(id: string) {
     this.entries.delete(id);
     this.entriesRich.delete(id);
@@ -129,10 +130,6 @@ export class CitationDatabase {
     return undefined;
   }
 
-  reloadDefault() {
-    this.file = this.plugin?.getDefaultDatabase();
-  }
-
   serialize() {
     const entries = Array.from(this.entries.values());
     return serializeEntries(entries, this.type);
@@ -148,34 +145,149 @@ export class CitationDatabase {
    * and via `{{entry.title}}`.
    */
   getTemplateVariablesForCitekey(citekey: string): Record<string, any> {
-    const entry = this.entries[citekey];
+    const entry = this.entriesRich.get(citekey);
     return entry ? { entry, ...entry } : {};
   }
 
+  addCustomCitationStyle(input: string) {
+    const config = plugins.config.get('@csl');
+    config.templates.add('custom', input);
+  }
+
   /**
-   * (Re)build the citeproc engine with the currently selected CSL style and
-   * locale. Called on library load and whenever the style setting changes.
+   * Render a bibliography (reference list) for the given citekeys.
+   * Returns an array of HTML strings, one per entry.
    */
-  async loadCiteEngine(): Promise<void> {
-    if (!this.citeEngine || !this.plugin) return;
+  renderBibliography(citekeys: string[], opts?: CiteOptions): string[] {
+    try {
+      const validIds = citekeys.filter((id) => this.entries.has(id));
+      if (validIds.length === 0) return [];
 
-    const styleId = this.plugin.settings.cslStyle;
-    let customXml: string | undefined;
+      const engine = this.buildCiteEngine(opts);
+      engine.updateItems(validIds);
+      const [, bibBody] = engine.makeBibliography();
+      return bibBody;
+    } catch (err) {
+      console.error('Citation manager: bibliography render error:', err);
+    }
+    return [];
+  }
 
-    if (this.plugin.settings.customCslStylePath) {
-      try {
-        customXml = await this.plugin.app.vault.adapter.read(
-          this.plugin.settings.customCslStylePath,
-        );
-      } catch (err) {
-        console.warn(
-          'Citation manager: could not load custom CSL style, falling back to bundled style.',
-          err,
-        );
-      }
+  /**
+   * Render an in-text citation cluster for the given citekeys.
+   */
+  renderCitationCluster(citekeys: string[], opts?: CiteOptions): string {
+    try {
+      const validIds = citekeys.filter((id) => this.entries.has(id));
+      if (validIds.length === 0) return '';
+
+      const engine = this.buildCiteEngine(opts);
+      engine.updateItems(validIds);
+      return engine.makeCitationCluster(validIds.map((id) => ({ id })));
+    } catch (err) {
+      console.error('Citation manager: citation cluster render error:', err);
+    }
+    return '';
+  }
+
+  /**
+   * Build a fresh citeproc-js `Engine` seeded with every entry currently
+   * in the database. The engine is cheap to construct when the style XML
+   * is already cached by citation-js, and — unlike `Cite.format('citation')`
+   * — it exposes `rebuildProcessorState`, which is the only way to render
+   * a *batch* of in-text citations with correct sequential numbering for
+   * numeric styles (e.g. IEEE) in a single pass.
+   */
+  private buildCiteEngine(opts?: CiteOptions): InstanceType<typeof CSL.Engine> {
+    const cslConfig = plugins.config.get('@csl');
+    if (!cslConfig) throw new Error('CSL plugin not configured');
+
+    const style = opts?.style ?? this.plugin?.settings.cslStyle;
+    const stylePath = this.plugin?.settings.customCslStylePath;
+    const styleXml =
+      style === 'custom' && stylePath
+        ? stylePath
+        : (cslConfig.templates.get(style) ?? cslConfig.templates.get('apa'));
+
+    if (!styleXml) {
+      throw new Error(
+        `Unknown citation style: ${this.plugin?.settings.cslStyle}`,
+      );
     }
 
-    this.citeEngine.setLocale(BUNDLED_LOCALE_EN_US);
-    this.citeEngine.configure(styleId, customXml);
+    const lang = opts?.language || this.plugin?.settings.cslLanguage || 'en-US';
+
+    const items: Record<string, EntryDataCSL> = {};
+    for (const [id, entry] of this.entries) {
+      items[id] = entry;
+    }
+
+    const sys: CiteprocSys = {
+      retrieveLocale: (l: string) =>
+        cslConfig.locales.get(l) ?? cslConfig.locales.get('en-US') ?? {},
+      retrieveItem: (id: string) => items[id],
+    };
+
+    return new CSL.Engine(sys, styleXml, lang, true);
+  }
+
+  /**
+   * Render a batch of in-text citations in document order. Uses
+   * citeproc-js `rebuildProcessorState`, which resets and renders the
+   * whole batch in a single pass (assigning correct sequential numbers
+   * for numeric styles like IEEE within the batch) without re-parsing
+   * the CSL style XML.
+   *
+   * Returns an array of HTML strings, one per input citation (in the
+   * same order). Empty strings for citations with no valid citekeys.
+   */
+  renderInlineCitationsBatch(
+    citations: CitationItem[][],
+    opts?: CiteOptions,
+  ): string[] {
+    const results: string[] = citations.map(() => '');
+
+    // Build citeproc Citation objects in document order, skipping
+    // citations whose items are all unknown.
+    const citationObjs: { originalIndex: number; citation: Citation }[] = [];
+    const allIds = new Set<string>();
+
+    for (let i = 0; i < citations.length; i++) {
+      const validItems = citations[i]!.filter((item) =>
+        this.entries.has(item.id),
+      );
+      if (validItems.length === 0) continue;
+      for (const item of validItems) allIds.add(item.id);
+      citationObjs.push({
+        originalIndex: i,
+        citation: {
+          citationID: `cit-${i}`,
+          citationItems: validItems,
+          properties: { noteIndex: i + 1, index: i },
+        },
+      });
+    }
+
+    if (citationObjs.length === 0) return results;
+
+    try {
+      const engine = this.buildCiteEngine(opts);
+      engine.updateItems(Array.from(allIds));
+
+      const triples = engine.rebuildProcessorState(
+        citationObjs.map((o) => o.citation),
+        'html',
+        [],
+      );
+
+      for (let j = 0; j < triples.length; j++) {
+        const originalIndex = citationObjs[j]!.originalIndex;
+        results[originalIndex] = triples[j]![2];
+      }
+    } catch (err) {
+      console.error('Citation manager: inline citation render error:', err);
+    }
+
+    return results;
   }
 }

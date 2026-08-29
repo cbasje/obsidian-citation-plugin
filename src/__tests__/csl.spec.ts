@@ -9,7 +9,7 @@ function loadBibLaTeXEntries(filename: string): string {
 }
 
 describe('Citation.js BibLaTeX → CSL conversion', () => {
-  const db = new CitationDatabase(undefined, buildFile('bib'));
+  const db = new CitationDatabase(buildFile('bib'));
 
   beforeEach(async () => {
     await db.deserialize(loadBibLaTeXEntries('library.bib'));
@@ -82,7 +82,7 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
 });
 
 describe('CslItemRegistry', () => {
-  const db = new CitationDatabase(undefined, buildFile('bib'));
+  const db = new CitationDatabase(buildFile('bib'));
 
   beforeEach(async () => {
     await db.deserialize(loadBibLaTeXEntries('library.bib'));
@@ -91,9 +91,9 @@ describe('CslItemRegistry', () => {
   test('loads and retrieves items', () => {
     const entries = Array.from(db.entries.values());
 
-    expect(db.size).toBe(entries.length);
-    expect(db.has('aitchison2017you')).toBe(true);
-    expect(db.has('nonexistent')).toBe(false);
+    expect(db.entries.size).toBe(entries.length);
+    expect(db.entries.has('aitchison2017you')).toBe(true);
+    expect(db.entries.has('nonexistent')).toBe(false);
 
     const item = db.retrieve('aitchison2017you');
     expect(item.id).toBe('aitchison2017you');
@@ -102,16 +102,14 @@ describe('CslItemRegistry', () => {
 });
 
 describe('CiteprocEngine integration', () => {
-  const db = new CitationDatabase(undefined, buildFile('bib'));
+  const db = new CitationDatabase(buildFile('bib'));
 
   beforeEach(async () => {
     await db.deserialize(loadBibLaTeXEntries('library.bib'));
   });
 
   test('renders an APA bibliography', async () => {
-    db.citeEngine.configure('apa');
-
-    const html = db.citeEngine.renderBibliography(['aitchison2017you']);
+    const html = db.renderBibliography(['aitchison2017you'], { style: 'apa' });
     expect(html).toHaveLength(1);
     expect(html[0]).toContain('Aitchison');
     expect(html[0]).toContain('Lengyel');
@@ -119,103 +117,94 @@ describe('CiteprocEngine integration', () => {
   });
 
   test('renders multiple entries sorted', async () => {
-    db.citeEngine.configure('apa');
-
-    const html = db.citeEngine.renderBibliography([
-      'aitchison2017you',
-      'Weiner2003',
-      'alexandrescu2006factored',
-    ]);
+    const html = db.renderBibliography(
+      ['aitchison2017you', 'Weiner2003', 'alexandrescu2006factored'],
+      { style: 'apa' },
+    );
     expect(html).toHaveLength(3);
   });
 
   test('renders an in-text citation cluster', () => {
-    db.citeEngine.configure('apa');
-
-    const cluster = db.citeEngine.renderCitationCluster(['aitchison2017you']);
+    const cluster = db.renderCitationCluster(['aitchison2017you'], {
+      style: 'apa',
+    });
     expect(cluster).toContain('Aitchison');
     expect(cluster).toContain('2017');
   });
 
-  test('renders with IEEE style', () => {
-    db.citeEngine.configure('ieee');
-
-    const html = db.citeEngine.renderBibliography(['aitchison2017you']);
+  test('renders with Vancouver style', () => {
+    const html = db.renderBibliography(['aitchison2017you'], {
+      style: 'vancouver',
+    });
     expect(html).toHaveLength(1);
     expect(html[0]).toContain('Aitchison');
   });
 
-  test('renders with Chicago author-date style', () => {
-    db.citeEngine.configure('chicago-author-date');
-
-    const html = db.citeEngine.renderBibliography(['aitchison2017you']);
+  test('renders with Harvard style', () => {
+    const html = db.renderBibliography(['aitchison2017you'], {
+      style: 'harvard1',
+    });
     expect(html).toHaveLength(1);
     expect(html[0]).toContain('Aitchison');
   });
 });
 
 describe('CiteprocEngine inline citations', () => {
-  const db = new CitationDatabase(undefined, buildFile('bib'));
+  const db = new CitationDatabase(buildFile('bib'));
 
   beforeEach(async () => {
     await db.deserialize(loadBibLaTeXEntries('library.bib'));
   });
 
   test('renders a single inline citation', () => {
-    db.citeEngine.configure('apa');
-
-    const html = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you' }],
-    ]);
+    const html = db.renderInlineCitationsBatch([[{ id: 'aitchison2017you' }]], {
+      style: 'apa',
+    });
     expect(html[0]).toContain('Aitchison');
     expect(html[0]).toContain('2017');
   });
 
   test('renders multiple citations in one cluster', () => {
-    db.citeEngine.configure('apa');
-
-    const html = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you' }, { id: 'Weiner2003' }],
-    ]);
+    const html = db.renderInlineCitationsBatch(
+      [[{ id: 'aitchison2017you' }, { id: 'Weiner2003' }]],
+      { style: 'apa' },
+    );
     expect(html[0]).toContain('Aitchison');
     expect(html[0]).toContain('Weiner');
   });
 
   test('renders suppress-author citation', () => {
-    db.citeEngine.configure('apa');
-
-    const html = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you', 'suppress-author': true }],
-    ]);
+    const html = db.renderInlineCitationsBatch(
+      [[{ id: 'aitchison2017you', 'suppress-author': true }]],
+      { style: 'apa' },
+    );
     expect(html[0]).toContain('2017');
   });
 
   test('renders with locator', () => {
-    db.citeEngine.configure('apa');
-
-    const html = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you', locator: 'p. 220' }],
-    ]);
+    const html = db.renderInlineCitationsBatch(
+      [[{ id: 'aitchison2017you', locator: 'p. 220' }]],
+      { style: 'apa' },
+    );
     expect(html[0]).toContain('220');
   });
 
   test('returns empty for unknown citekeys', () => {
-    db.citeEngine.configure('apa');
-
-    const html = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'nonexistent' }],
-    ]);
+    const html = db.renderInlineCitationsBatch([[{ id: 'nonexistent' }]], {
+      style: 'apa',
+    });
     expect(html).toEqual(['']);
   });
 
-  test('IEEE assigns correct citation numbers in batch', () => {
-    db.citeEngine.configure('ieee');
-
-    const results = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you' }],
-      [{ id: 'Weiner2003' }],
-      [{ id: 'alexandrescu2006factored' }],
-    ]);
+  test('Vancouver assigns correct citation numbers in batch', () => {
+    const results = db.renderInlineCitationsBatch(
+      [
+        [{ id: 'aitchison2017you' }],
+        [{ id: 'Weiner2003' }],
+        [{ id: 'alexandrescu2006factored' }],
+      ],
+      { style: 'vancouver' },
+    );
 
     expect(results).toHaveLength(3);
     expect(results[0]).toContain('1');
@@ -223,27 +212,24 @@ describe('CiteprocEngine inline citations', () => {
     expect(results[2]).toContain('3');
   });
 
-  test('IEEE is stateless across repeated batch renders', () => {
-    db.citeEngine.configure('ieee');
-
-    const first = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you' }],
-      [{ id: 'Weiner2003' }],
-    ]);
-    const second = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you' }],
-      [{ id: 'Weiner2003' }],
-    ]);
+  test('Vancouver is stateless across repeated batch renders', () => {
+    const first = db.renderInlineCitationsBatch(
+      [[{ id: 'aitchison2017you' }], [{ id: 'Weiner2003' }]],
+      { style: 'apa' },
+    );
+    const second = db.renderInlineCitationsBatch(
+      [[{ id: 'aitchison2017you' }], [{ id: 'Weiner2003' }]],
+      { style: 'apa' },
+    );
 
     expect(first).toEqual(second);
   });
 
   test('APA inline batch still works (author-date style)', () => {
-    db.citeEngine.configure('apa');
-
-    const results = db.citeEngine.renderInlineCitationsBatch([
-      [{ id: 'aitchison2017you' }],
-    ]);
+    const results = db.renderInlineCitationsBatch(
+      [[{ id: 'aitchison2017you' }]],
+      { style: 'apa' },
+    );
 
     expect(results[0]).toContain('Aitchison');
     expect(results[0]).toContain('2017');

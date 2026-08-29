@@ -150,7 +150,7 @@ async function fetchURL(id: string): Promise<Omit<EntryDataCSL, 'id'>> {
  */
 export function generateCiteKey(
   entry: EntryDataCSL,
-  existing = new Set<string>(),
+  existing: string[],
 ): string {
   const name = firstAuthorLastName(entry.author);
   const year = entryYear(entry.issued);
@@ -159,7 +159,7 @@ export function generateCiteKey(
 
   let key = base;
   let suffix = 1;
-  while (existing.has(key)) {
+  while (new Set(existing).has(key)) {
     const suffixLetter = String.fromCharCode(98 + suffix - 1); // 'b', 'c', ...
     key = `${base}-${suffixLetter}`;
     suffix++;

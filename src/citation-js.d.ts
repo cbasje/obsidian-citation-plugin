@@ -7,18 +7,41 @@ declare module '@citation-js/core' {
   }
 
   export class Cite {
-    constructor(input: string, options?: Record<string, unknown>);
+    constructor(
+      input: string | CSL[] | Record<string, unknown>[],
+      options?: Record<string, unknown>,
+    );
     data: CSL[];
     static async(
-      input: string,
+      input: string | CSL[] | Record<string, unknown>[],
       options?: Record<string, unknown>,
     ): Promise<Cite>;
+    format(
+      type: string,
+      options?: Record<string, unknown>,
+    ): string | string[];
   }
 
   interface RawBibLaTeXEntry {
     type: string;
     label: string;
     properties: Record<string, string>;
+  }
+
+  interface CslRegister {
+    add(name: string, value: string): void;
+    set(name: string, value: string): void;
+    get(name: string): string | undefined;
+    has(name: string): boolean;
+    remove(name: string): void;
+    list(): string[];
+  }
+
+  interface CslConfig {
+    engine: unknown;
+    templates: CslRegister;
+    locales: CslRegister;
+    [key: string]: unknown;
   }
 
   export const plugins: {
@@ -36,6 +59,13 @@ declare module '@citation-js/core' {
     has(name: string): boolean;
     add(name: string, config: Record<string, unknown>): void;
     remove(name: string): void;
+    config: {
+      get(name: string): CslConfig | undefined;
+      has(name: string): boolean;
+      add(name: string, config: Record<string, unknown>): void;
+      remove(name: string): void;
+      list(): string[];
+    };
   };
 
   export const util: {
@@ -52,6 +82,10 @@ declare module '@citation-js/core' {
 
 declare module '@citation-js/plugin-bibtex' {
   // Side-effect import: registers BibTeX/BibLaTeX formats with @citation-js/core.
+}
+
+declare module '@citation-js/plugin-csl' {
+  // Side-effect import: registers CSL output format with @citation-js/core.
 }
 
 declare module '@citation-js/plugin-doi' {

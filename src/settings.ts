@@ -7,7 +7,12 @@ import {
 } from 'obsidian';
 import CitationPlugin from './main';
 import { type IIndexable, TEMPLATE_VARIABLES, fileTypes } from './types';
-import { CSL_STYLES, type CslStyleId } from './csl/assets';
+import {
+  CSL_LANGS,
+  CSL_STYLES,
+  type CSL_LANG,
+  type CSL_STYLE_ID,
+} from './csl/assets';
 
 export class CitationsPluginSettings {
   public citationExportPath: string = '';
@@ -27,8 +32,9 @@ year: {{year}}
 ---
 `;
 
-  cslStyle: CslStyleId = 'apa';
+  cslStyle: CSL_STYLE_ID | 'custom' = 'apa';
   customCslStylePath = '';
+  cslLanguage: CSL_LANG | string = 'en-US';
   renderInlineCitations = true;
 }
 
@@ -215,20 +221,11 @@ export class CitationSettingTab extends PluginSettingTab {
         'line.',
     });
 
-    const styleOptions: Record<string, string> = {};
-    CSL_STYLES.forEach((s) => (styleOptions[s.id] = s.label));
-
     new Setting(containerEl)
       .setName('CSL style')
       .setDesc('Citation style used for bibliography rendering.')
       .addDropdown((component) =>
-        this.buildValueInput(
-          component.addOptions(styleOptions),
-          'cslStyle',
-          () => {
-            this.plugin.db.loadCiteEngine();
-          },
-        ),
+        this.buildValueInput(component.addOptions(CSL_STYLES), 'cslStyle'),
       );
 
     new Setting(containerEl)
@@ -238,9 +235,17 @@ export class CitationSettingTab extends PluginSettingTab {
         'Overrides the style dropdown when set.',
       )
       .addText((input) =>
-        this.buildValueInput(input, 'customCslStylePath', () => {
-          this.plugin.db.loadCiteEngine();
+        this.buildValueInput(input, 'customCslStylePath', (value) => {
+          this.plugin.settings.cslStyle = 'custom';
+          this.plugin.db.addCustomCitationStyle(value);
         }),
+      );
+
+    new Setting(containerEl)
+      .setName('CSL language')
+      .setDesc('Language used for bibliography rendering.')
+      .addDropdown((component) =>
+        this.buildValueInput(component.addOptions(CSL_LANGS), 'cslLanguage'),
       );
 
     new Setting(containerEl)
@@ -282,7 +287,7 @@ export class CitationSettingTab extends PluginSettingTab {
     if (!this.plugin.db) return;
 
     this.citationPathSuccessEl?.setText(
-      `Loaded library with ${this.plugin.db.size} references.`,
+      `Loaded library with ${this.plugin.db.entries.size} references.`,
     );
     this.citationPathSuccessEl?.removeClass('d-none');
   }

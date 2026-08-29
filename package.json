@@ -47,6 +47,7 @@
   "dependencies": {
     "@citation-js/core": "^0.6.9",
     "@citation-js/plugin-bibtex": "^0.6.9",
+    "@citation-js/plugin-csl": "^0.6.9",
     "@citation-js/plugin-doi": "^0.6.9",
     "@citation-js/plugin-isbn": "^0.4.0",
     "@citation-js/plugin-orcid": "^0.3.1",
@@ -64,7 +65,9 @@
   "jest": {
     "moduleNameMapper": {
       "node-fetch": "<rootDir>/jest-fetch-mock.js",
-      "sync-fetch": "<rootDir>/jest-fetch-mock.js"
+      "sync-fetch": "<rootDir>/jest-fetch-mock.js",
+      "^svelte/reactivity$": "<rootDir>/jest-svelte-reactivity.js",
+      "^svelte(/.*)$": "<rootDir>/jest-svelte-reactivity.js"
     },
     "moduleFileExtensions": [
       "js",

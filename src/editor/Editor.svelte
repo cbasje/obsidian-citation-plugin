@@ -77,7 +77,7 @@
       <IconPlus class="svg-icon" />
       <span class="text-button-label">Add reference</span>
     </button>
-    <span class="count">{db.size} entries</span>
+    <span class="count">{db.entries.size} entries</span>
   </div>
 
   <div class="table-wrap">

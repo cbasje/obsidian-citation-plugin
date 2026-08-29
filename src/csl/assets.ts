@@ -1,50 +1,20 @@
-import apaStyle from './styles/apa.csl';
-import ieeeStyle from './styles/ieee.csl';
-import chicagoAuthorDateStyle from './styles/chicago-author-date.csl';
-import enUsLocale from './locales/locales-en-US.xml';
-
-export type CslStyleId = 'apa' | 'ieee' | 'chicago-author-date';
-
-export interface CslStyleOption {
-  id: CslStyleId;
-  label: string;
-}
-
-export const CSL_STYLES: CslStyleOption[] = [
-  { id: 'apa', label: 'APA 7th edition' },
-  { id: 'ieee', label: 'IEEE' },
-  { id: 'chicago-author-date', label: 'Chicago (author-date)' },
-];
-
-const BUNDLED_STYLES: Record<CslStyleId, string> = {
-  apa: apaStyle,
-  ieee: ieeeStyle,
-  'chicago-author-date': chicagoAuthorDateStyle,
+export type CSL_STYLE_ID = 'apa' | 'vancouver' | 'harvard1';
+export const CSL_STYLES: Record<CSL_STYLE_ID, string> = {
+  apa: 'APA 7th edition',
+  vancouver: 'Vancouver',
+  harvard1: 'Harvard',
 };
 
-/**
- * Resolve a CSL style XML string for the given style id. If a custom path is
- * provided it is preferred; otherwise the bundled copy is used.
- */
-export function resolveStyleXml(
-  id: CslStyleId,
-  customStyleXml?: string,
-): string {
-  if (customStyleXml) return customStyleXml;
-  return BUNDLED_STYLES[id] ?? BUNDLED_STYLES.apa;
-}
+export type CSL_LANG = 'en-US' | 'es-ES' | 'de-DE' | 'fr-FR' | 'nl-NL';
+export const CSL_LANGS: Record<CSL_LANG, string> = {
+  'en-US': 'en-US',
+  'es-ES': 'es-ES',
+  'de-DE': 'de-DE',
+  'fr-FR': 'fr-FR',
+  'nl-NL': 'nl-NL',
+};
 
-/**
- * The bundled en-US locale XML string.
- */
-export const BUNDLED_LOCALE_EN_US: string = enUsLocale;
-
-/**
- * Retrieve a locale XML string for a language code.  Currently only the
- * bundled `en-US` locale is available; other languages fall back to it.
- */
-export function makeLocaleRetriever(
-  bundledLocale: string = BUNDLED_LOCALE_EN_US,
-): (lang: string) => string {
-  return (_lang: string) => bundledLocale;
-}
+export type CiteOptions = {
+  style?: CSL_STYLE_ID;
+  language?: CSL_LANG;
+};

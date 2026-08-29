@@ -6,7 +6,6 @@ import {
   Plugin,
   TFile,
   TFolder,
-  type MarkdownPostProcessorContext,
 } from 'obsidian';
 import {
   compile as compileTemplate,
@@ -20,9 +19,10 @@ import { DISALLOWED_FILENAME_CHARACTERS_RE } from './util';
 import type { CitationItem } from 'citeproc';
 import { EditorView } from './editor/editor-view';
 import { buildInlineCitationExtension } from './citations/extension';
-import { extractCitekeys, parseCitationGroup } from './citations/parse';
+import { parseCitationGroup } from './citations/parse';
 import { StatusBarCounter } from './status-bar';
 import { CitationDatabase } from './database';
+import { ReferencesBlockView } from './references/references';
 
 export function getMarkdownCitationForCitekey(citekey: string): string {
   return `[@${citekey}]`;
@@ -55,6 +55,7 @@ export default class CitationPlugin extends Plugin {
       'literatureNoteContentTemplate',
       'cslStyle',
       'customCslStylePath',
+      'cslLanguage',
       'renderInlineCitations',
     ];
     toLoad.forEach((setting) => {
@@ -86,12 +87,6 @@ export default class CitationPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  async onload(): Promise<void> {
-    await this.loadSettings();
-
-    this.init();
-  }
-
   async loadDatabase() {
     try {
       console.debug('loadDatabase');
@@ -105,9 +100,11 @@ export default class CitationPlugin extends Plugin {
     }
   }
 
-  async init(): Promise<void> {
+  async onload(): Promise<void> {
     console.debug(`Loading ${CIT_VIEW_TYPE} plugin`);
-    this.db = new CitationDatabase(this, this.getDefaultDatabase());
+
+    await this.loadSettings();
+    console.debug('SETTING', this.settings);
 
     // Editor extension: render `[@citekey]` markers as formatted in-text
     // citations in Live Preview via CodeMirror Decorations. Re-registering
@@ -120,29 +117,14 @@ export default class CitationPlugin extends Plugin {
     counter.register();
 
     if (this.settings.citationExportPath) {
+      this.db = new CitationDatabase(this.settings.citationExportPath, this);
       this.loadDatabase();
 
-      // Watch for changes to the library file using Obsidian's vault API.
       this.registerEvent(
         this.app.vault.on('modify', (file) => {
+          // Watch for changes to the library file
           if (file.path === this.settings.citationExportPath) {
-            this.db.reloadDefault();
             this.loadDatabase();
-            return;
-          }
-
-          if (
-            file instanceof TFile &&
-            file.parent.name === this.settings.literatureNoteFolder &&
-            this.db?.paths?.size
-          ) {
-            console.log('LIT NOTE', file.path, this.db.paths);
-            if (!this.db.paths.has(file.path)) return;
-
-            // TODO: Update library when it is a note
-            this.app.fileManager.processFrontMatter(file, (obj) => {
-              console.log('LIT NOTE', obj);
-            });
             return;
           }
         }),
@@ -204,7 +186,7 @@ export default class CitationPlugin extends Plugin {
       id: 'insert-references-block',
       name: 'Insert references block',
       callback: () => {
-        this.insertReferencesBlock();
+        ReferencesBlockView.insert(this.editor);
       },
     });
 
@@ -212,7 +194,9 @@ export default class CitationPlugin extends Plugin {
     this.registerMarkdownCodeBlockProcessor(
       'references',
       async (source, el, ctx) => {
-        await this.renderReferencesBlock(source, el, ctx);
+        const child = new ReferencesBlockView(el, this);
+        ctx.addChild(child);
+        await child.init(source, ctx.sourcePath);
       },
     );
 
@@ -289,18 +273,6 @@ export default class CitationPlugin extends Plugin {
     );
   }
 
-  getDefaultDatabase(): TFile {
-    if (!this.settings.citationExportPath) {
-      console.warn(
-        'Citations plugin: citation export path is not set. Please update plugin settings.',
-      );
-      return;
-    }
-
-    const path = this.settings.citationExportPath;
-    return this.app.vault.getFileByPath(path);
-  }
-
   /**
    * Run a case-insensitive search for the literature note file corresponding to
    * the given citekey. If no corresponding file is found, create one.
@@ -353,84 +325,6 @@ export default class CitationPlugin extends Plugin {
     if (!editor) return;
     const citation = getMarkdownCitationForCitekey(citekey);
     editor.replaceRange(citation, editor.getCursor());
-  }
-
-  /**
-   * Insert an empty `references` fenced code block at the cursor. In reading
-   * view it will auto-scan the note for Pandoc-style citations.
-   */
-  insertReferencesBlock(): void {
-    const editor = this.editor;
-    if (!editor) {
-      new Notice('Open a Markdown note before inserting a references block.');
-      return;
-    }
-    editor.replaceRange('```references\n\n```', editor.getCursor());
-  }
-
-  /**
-   * Render a `references` code block as a styled bibliography using
-   * citeproc-js. The block contents may be empty (auto-scan the surrounding
-   * note for `[@citekey]` markers) or list citekeys one per line.
-   */
-  async renderReferencesBlock(
-    source: string,
-    el: HTMLElement,
-    ctx: MarkdownPostProcessorContext,
-  ): Promise<void> {
-    if (!this.db.citeEngine.isReady || this.db.size === 0) {
-      el.createEl('p', {
-        text: 'Citation library is not loaded.',
-        cls: 'csl-placeholder',
-      });
-      return;
-    }
-
-    // Parse explicit citekeys from the block (one per line, ignoring blanks
-    // and comments).
-    let citekeys = source
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith('#') && !l.startsWith('<!--'));
-
-    // If the block is empty or starts with "auto", scan the note text.
-    if (citekeys.length === 0 || citekeys[0].toLowerCase() === 'auto') {
-      const noteFile = this.app.vault.getFileByPath(ctx.sourcePath);
-      if (noteFile) {
-        const text = await this.app.vault.read(noteFile);
-        citekeys = extractCitekeys(text);
-      }
-    }
-
-    const valid = citekeys.filter((k) => this.db.has(k));
-    if (valid.length === 0) {
-      el.createEl('p', {
-        text: 'No citations found.',
-        cls: 'csl-placeholder',
-      });
-      return;
-    }
-
-    const entries = this.db.citeEngine.renderBibliography(valid);
-    if (entries.length === 0) {
-      el.createEl('p', {
-        text: 'No bibliography entries could be rendered.',
-        cls: 'csl-placeholder',
-      });
-      return;
-    }
-
-    // Render citeproc HTML output safely: build it in a detached container
-    // and move the child nodes into the plugin's element. This avoids setting
-    // innerHTML directly on a live DOM node (recommended by the Obsidian plugin
-    // review guidelines).
-    const container = document.createElement('div');
-    container.innerHTML = `<div class="csl-bibliography">${entries.join(
-      '',
-    )}</div>`;
-    while (container.firstChild) {
-      el.appendChild(container.firstChild);
-    }
   }
 
   /**
@@ -492,7 +386,7 @@ export default class CitationPlugin extends Plugin {
 
     // Pass 3: render all citations as a batch (assigns correct numbers for
     // numeric styles like IEEE).
-    const rendered = this.db.citeEngine.renderInlineCitationsBatch(
+    const rendered = this.db.renderInlineCitationsBatch(
       allCitations.map((c) => c.items),
     );
 

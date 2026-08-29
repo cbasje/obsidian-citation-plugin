@@ -140,7 +140,7 @@ const renderAdvancedTemplate = (db: CitationDatabase, citekey: string) => {
 };
 
 describe('biblatex library', () => {
-  const db = new CitationDatabase(undefined, buildFile('bib'));
+  const db = new CitationDatabase(buildFile('bib'));
 
   beforeEach(async () => {
     const biblatexPath = path.join(__dirname, 'library.bib');
@@ -149,7 +149,7 @@ describe('biblatex library', () => {
   });
 
   test('loads', () => {
-    expect(db.size).toBe(5);
+    expect(db.entries.size).toBe(5);
   });
 
   test('can support library', () => {
@@ -173,7 +173,7 @@ describe('biblatex library', () => {
 });
 
 describe('biblatex regression tests', () => {
-  const db = new CitationDatabase(undefined, buildFile('bib'));
+  const db = new CitationDatabase(buildFile('bib'));
 
   test('regression 7f9aefe (non-fatal parser error handling)', () => {
     const load = () => {
@@ -200,7 +200,7 @@ describe('biblatex regression tests', () => {
 });
 
 describe('csl library', () => {
-  const db = new CitationDatabase(undefined, buildFile('json'));
+  const db = new CitationDatabase(buildFile('json'));
 
   beforeEach(async () => {
     const csl = loadJsonEntries('library.json');
@@ -208,7 +208,7 @@ describe('csl library', () => {
   });
 
   test('loads', () => {
-    expect(db.size).toBe(5);
+    expect(db.entries.size).toBe(5);
   });
 
   test('can support library', () => {

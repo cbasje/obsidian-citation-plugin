@@ -70,7 +70,7 @@ export class EditorView extends TextFileView {
   async onLoadFile(file: TFile) {
     console.log('onLoadFile');
 
-    this.db = new CitationDatabase(this.plugin, file);
+    this.db = new CitationDatabase(file, this.plugin);
     this.editor = mount(Editor, {
       target: this.contentEl,
       props: {
