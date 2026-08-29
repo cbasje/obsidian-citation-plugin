@@ -82,7 +82,7 @@ export class CitationSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.setAttr('id', 'zoteroSettingTab');
 
-    containerEl.createEl('h2', { text: 'Citation plugin settings' });
+    containerEl.createEl('h2', { text: 'Citation manager settings' });
 
     const supportedFiles = this.app.vault
       .getFiles()
@@ -108,8 +108,8 @@ export class CitationSettingTab extends PluginSettingTab {
           (value) => {
             this.checkCitationExportPath(value).then((success) => {
               if (success)
-                this.plugin
-                  .loadLibrary()
+                this.plugin.db
+                  .load()
                   .then(() => this.showCitationExportPathSuccess());
             });
           },
@@ -226,7 +226,7 @@ export class CitationSettingTab extends PluginSettingTab {
           component.addOptions(styleOptions),
           'cslStyle',
           () => {
-            this.plugin.loadCiteprocEngine();
+            this.plugin.db.loadCiteEngine();
           },
         ),
       );
@@ -239,7 +239,7 @@ export class CitationSettingTab extends PluginSettingTab {
       )
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', () => {
-          this.plugin.loadCiteprocEngine();
+          this.plugin.db.loadCiteEngine();
         }),
       );
 
@@ -279,10 +279,10 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   showCitationExportPathSuccess(): void {
-    if (!this.plugin.library) return;
+    if (!this.plugin.db) return;
 
     this.citationPathSuccessEl?.setText(
-      `Loaded library with ${this.plugin.library.size} references.`,
+      `Loaded library with ${this.plugin.db.size} references.`,
     );
     this.citationPathSuccessEl?.removeClass('d-none');
   }

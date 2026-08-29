@@ -1,6 +1,6 @@
 import CSL from 'citeproc';
 import type { Citation, CitationItem } from 'citeproc';
-import { CslItemRegistry } from './registry';
+import type { CitationDatabase } from '../database';
 import {
   makeLocaleRetriever,
   resolveStyleXml,
@@ -15,13 +15,10 @@ import {
  */
 export class CiteprocEngine {
   private engine: InstanceType<typeof CSL.Engine> | null = null;
-  private registry: CslItemRegistry;
   private styleXml: string;
   private localeXml: string;
 
-  constructor(registry: CslItemRegistry) {
-    this.registry = registry;
-  }
+  constructor(public db: CitationDatabase) { }
 
   /**
    * (Re)build the underlying citeproc engine with the given style. Any
@@ -47,13 +44,13 @@ export class CiteprocEngine {
 
     const sys = {
       retrieveLocale: makeLocaleRetriever(this.localeXml),
-      retrieveItem: this.registry.retrieve,
+      retrieveItem: this.db.retrieve,
     };
 
     try {
       this.engine = new CSL.Engine(sys, this.styleXml);
     } catch (err) {
-      console.error('Citation plugin: failed to build citeproc engine:', err);
+      console.error('Citation manager: failed to build citeproc engine:', err);
       this.engine = null;
     }
   }
@@ -69,7 +66,7 @@ export class CiteprocEngine {
   renderBibliography(citekeys: string[]): string[] {
     if (!this.engine) return [];
 
-    const valid = citekeys.filter((id) => this.registry.has(id));
+    const valid = citekeys.filter((id) => this.db.has(id));
     if (valid.length === 0) return [];
 
     try {
@@ -79,7 +76,7 @@ export class CiteprocEngine {
         return result[1];
       }
     } catch (err) {
-      console.error('Citation plugin: bibliography render error:', err);
+      console.error('Citation manager: bibliography render error:', err);
     }
     return [];
   }
@@ -90,14 +87,14 @@ export class CiteprocEngine {
   renderCitationCluster(citekeys: string[]): string {
     if (!this.engine) return '';
 
-    const valid = citekeys.filter((id) => this.registry.has(id));
+    const valid = citekeys.filter((id) => this.db.has(id));
     if (valid.length === 0) return '';
 
     try {
       this.engine.updateItems(valid);
       return this.engine.makeCitationCluster(valid.map((id) => ({ id })));
     } catch (err) {
-      console.error('Citation plugin: citation cluster render error:', err);
+      console.error('Citation manager: citation cluster render error:', err);
     }
     return '';
   }
@@ -127,9 +124,7 @@ export class CiteprocEngine {
     const results: string[] = citations.map(() => '');
     const objs: { originalIndex: number; citation: Citation }[] = [];
     for (let i = 0; i < citations.length; i++) {
-      const validItems = citations[i]!.filter((item) =>
-        this.registry.has(item.id),
-      );
+      const validItems = citations[i]!.filter((item) => this.db.has(item.id));
       if (validItems.length === 0) continue;
       objs.push({
         originalIndex: i,
@@ -152,7 +147,7 @@ export class CiteprocEngine {
         if (!Number.isNaN(idx)) results[idx] = str;
       }
     } catch (err) {
-      console.error('Citation plugin: inline citation render error:', err);
+      console.error('Citation manager: inline citation render error:', err);
     }
 
     // Reset to empty again so the engine is left clean for any

@@ -1,65 +1,37 @@
 <script lang="ts">
   import { getMarkdownCitationForCitekey } from '../main';
-  import {
-    type DatabaseType,
-    type EntryData,
-    type EntryDataCSL,
-    Library,
-  } from '../types';
+  import type { EntryMetadata } from '../types';
+  import type { App } from 'obsidian';
+  import type { CitationDatabase } from '../database';
 
   import IconClipboardCopy from '@lucide/svelte/icons/clipboard-copy';
   import IconPlus from '@lucide/svelte/icons/plus';
   import IconTrash from '@lucide/svelte/icons/trash';
 
   let {
-    dbType,
-    basePath,
-    vaultPath,
+    app,
+    db,
+    getNotePath,
+    openAddModal,
+    onChange,
+    onRemove,
   }: {
-    dbType: DatabaseType;
-    basePath: string | undefined;
-    vaultPath: string | undefined;
+    app: App;
+    db: CitationDatabase;
+    getNotePath: (id: string) => string;
+    openAddModal: () => void;
+    onChange: () => void;
+    onRemove?: (id: string) => void;
   } = $props();
 
-  let onChangeFunc: () => void = () => {};
-  let onAddFunc: () => void = () => {};
-  let entries = $state<EntryData[]>([]);
-
-  let metadata = $derived.by(() => {
-    if (entries.length === 0) return [];
-    const lib = new Library(entries, dbType, basePath, vaultPath);
-    return Object.values(lib.entries);
-  });
-
-  export function set(input: EntryData[]) {
-    entries = input;
-  }
-  export function get() {
-    return $state.snapshot(entries);
-  }
-  export function onChange(func: () => void) {
-    onChangeFunc = func;
-  }
-  export function onAdd(func: () => void) {
-    onAddFunc = func;
-  }
-
-  function handleAdd() {
-    onAddFunc();
-  }
+  let containerEl = $state<HTMLDivElement>();
+  let entries = $derived(db.entriesRich);
 
   function handleRemove(id: string) {
-    entries = entries.filter((e) => (e as EntryDataCSL).id !== id);
-    onChangeFunc();
-  }
-
-  /**
-   * Append a fetched entry. Called by the editor view after the
-   * AddReferenceModal successfully fetches data.
-   */
-  export function addEntry(entry: EntryData) {
-    entries.push(entry);
-    onChangeFunc();
+    entries.delete(id);
+    db.delete(id);
+    onChange();
+    onRemove?.(id);
   }
 
   export async function copyCitekey(key: string) {
@@ -67,7 +39,7 @@
     await navigator.clipboard.writeText(text);
   }
 
-  const columns: { key: keyof (typeof metadata)[number]; label: string }[] = [
+  const columns: { key: keyof EntryMetadata; label: string }[] = [
     { key: 'citekey', label: 'Citekey' },
     { key: 'type', label: 'Type' },
     { key: 'year', label: 'Year' },
@@ -77,15 +49,35 @@
     { key: 'URL', label: 'URL' },
     { key: 'files', label: 'Files' },
   ];
+
+  const noteHover = (node: HTMLSpanElement, citekey: string) => {
+    if (!citekey) return;
+
+    const cb = (ev: MouseEvent) => {
+      app.workspace.trigger('hover-link', {
+        event: ev,
+        source: 'bases',
+        hoverParent: containerEl,
+        targetEl: node,
+        linktext: getNotePath(citekey),
+      });
+    };
+
+    node.addEventListener('mouseenter', cb);
+
+    return {
+      destroy: () => node.removeEventListener('mouseenter', cb),
+    };
+  };
 </script>
 
-<div class="citation-manager">
+<div bind:this={containerEl} class="citation-manager">
   <div class="toolbar">
-    <button class="text-icon-button" onclick={handleAdd}>
+    <button class="text-icon-button" onclick={() => openAddModal()}>
       <IconPlus class="svg-icon" />
       <span class="text-button-label">Add reference</span>
     </button>
-    <span class="count">{entries.length} entries</span>
+    <span class="count">{db.size} entries</span>
   </div>
 
   <div class="table-wrap">
@@ -99,18 +91,19 @@
         </tr>
       </thead>
       <tbody>
-        {#each metadata as entry (entry.id)}
+        {#each Array.from(entries.values()) as entry (entry.id)}
           <tr>
             {#each columns as col (col.key)}
               {@const value = entry[col.key]}
               <td>
                 <div>
                   {#if col.key === 'citekey'}
-                    <span>{value}</span>
+                    {@const citekey = value ?? entry.id}
+                    <span use:noteHover={citekey}>{citekey}</span>
                     <button
                       title="Copy citation"
                       aria-label="Copy citation"
-                      onclick={() => copyCitekey(value)}
+                      onclick={() => copyCitekey(citekey)}
                       class="clickable-icon"
                     >
                       <IconClipboardCopy class="svg-icon" />
@@ -134,14 +127,24 @@
               </td>
             {/each}
             <td class="actions-col">
-              <button
-                title="Remove reference"
-                aria-label="Remove reference"
-                onclick={() => handleRemove(entry.id)}
-                class="clickable-icon"
-              >
-                <IconTrash class="svg-icon" />
-              </button>
+              <div>
+                <!-- <button
+                  title="Open literature note"
+                  aria-label="Open literature note"
+                  onclick={(e) => _onOpenLiteratureNote(entry.id, e.ctrlKey)}
+                  class="clickable-icon"
+                >
+                  <IconNotebookPen class="svg-icon" />
+                </button> -->
+                <button
+                  title="Remove reference"
+                  aria-label="Remove reference"
+                  onclick={() => handleRemove(entry.id)}
+                  class="clickable-icon"
+                >
+                  <IconTrash class="svg-icon" />
+                </button>
+              </div>
             </td>
           </tr>
         {:else}
@@ -226,11 +229,6 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-  }
-
-  .actions-col {
-    width: 2.2em;
-    text-align: center;
     white-space: nowrap;
   }
 

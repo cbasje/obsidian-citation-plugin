@@ -5,14 +5,14 @@ import type { CitationItem } from 'citeproc';
  * `[-@citekey]`, `[@smith2020; @jones2019, p. 5]`. Capture group 1 is the
  * text inside the brackets (without the surrounding `[]`).
  */
-export const CITATION_GROUP_PATTERN = /\[(-?@[^\]]+)\]/g;
+const CITATION_GROUP_PATTERN = /\[(-?@[^\]]+)\]/g;
 
 /**
  * Matches bare `@citekey` / `-@citekey` tokens used when auto-scanning a
  * note for the reference list. Group 1 is the citekey from a bracketed
  * form, group 2 is the citekey from a bare form.
  */
-export const CITEKEY_PATTERN = /\[-?@([^\]\s]+)\]|@([A-Za-z0-9_:-]+)/g;
+const CITEKEY_PATTERN = /\[-?@([^\]\s]+)\]|@([A-Za-z0-9_:-]+)/g;
 
 /**
  * A citation group located within a document's text. `from`/`to` are

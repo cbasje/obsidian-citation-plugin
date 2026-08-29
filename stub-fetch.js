@@ -7,7 +7,7 @@
 // checks in Citation.js's normaliseHeaders() don't throw.
 module.exports = () => {
   throw new Error(
-    'Citation plugin: synchronous fetch is not supported. Use Cite.async() instead.',
+    'Citation manager: synchronous fetch is not supported. Use Cite.async() instead.',
   );
 };
 module.exports.default = module.exports;

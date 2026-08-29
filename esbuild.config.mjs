@@ -1,7 +1,8 @@
 import esbuild from 'esbuild';
 import process from 'process';
 import { builtinModules } from 'node:module';
-import { fileURLToPath } from 'node:url'; import esbuildSvelte from 'esbuild-svelte';
+import { fileURLToPath } from 'node:url';
+import esbuildSvelte from 'esbuild-svelte';
 import LightningCSS from 'unplugin-lightningcss/esbuild';
 import browserslist from 'browserslist';
 import { browserslistToTargets, Features } from 'lightningcss';

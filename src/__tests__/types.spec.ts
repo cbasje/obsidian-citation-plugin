@@ -1,10 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
-
 import { compile as compileTemplate } from 'handlebars';
+import { CitationDatabase } from '../database';
+import { buildFile } from './utils';
 
-import { Library, type EntryDataBibLaTeX, type EntryDataCSL } from '../types';
-import { deserializeEntries } from '../serializer';
+function loadBibLaTeXEntries(filename: string): string {
+  const biblatexPath = path.join(__dirname, filename);
+  return fs.readFileSync(biblatexPath, 'utf-8');
+}
+
+function loadJsonEntries(filename: string): string {
+  const cslPath = path.join(__dirname, filename);
+  return fs.readFileSync(cslPath, 'utf-8');
+}
 
 const expectedRender: Record<string, string>[] = [
   {
@@ -125,64 +133,51 @@ function matchLibraryRender(
   expect(actual).toMatchObject(expected);
 }
 
-function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
-  const biblatexPath = path.join(__dirname, filename);
-  const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return deserializeEntries(biblatex, 'bib') as EntryDataBibLaTeX[];
-}
-
-function loadBibLaTeXLibrary(entries: EntryDataBibLaTeX[]): Library {
-  return new Library(entries, 'bib');
-}
-
-const renderAdvancedTemplate = (
-  loadLibrary: () => Library,
-  citekey: string,
-) => {
-  const library = loadLibrary();
+const renderAdvancedTemplate = (db: CitationDatabase, citekey: string) => {
   const template =
     '{{#each entry.author}}[[{{this.family}}, {{this.given}}]]{{#unless @last}}, {{/unless}}{{/each}}';
-  return compileTemplate(template)(
-    library.getTemplateVariablesForCitekey(citekey),
-  );
+  return compileTemplate(template)(db.getTemplateVariablesForCitekey(citekey));
 };
 
 describe('biblatex library', () => {
-  let entries: EntryDataBibLaTeX[];
-  beforeEach(() => {
-    entries = loadBibLaTeXEntries('library.bib');
+  const db = new CitationDatabase(undefined, buildFile('bib'));
+
+  beforeEach(async () => {
+    const biblatexPath = path.join(__dirname, 'library.bib');
+    const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
+    await db.deserialize(biblatex);
   });
-  const loadLibrary = () => loadBibLaTeXLibrary(entries);
 
   test('loads', () => {
-    expect(entries.length).toBe(5);
+    expect(db.size).toBe(5);
   });
 
   test('can support library', () => {
-    loadLibrary();
+    db.load();
   });
 
   test('renders correctly', () => {
-    const library = loadLibrary();
-    const templateVariables: Record<string, string>[] = Object.keys(
-      library.entries,
-    ).map((citekey) => {
-      return library.getTemplateVariablesForCitekey(citekey);
-    });
+    const templateVariables: Record<string, string>[] = Array.from(db.ids).map(
+      (citekey) => {
+        return db.getTemplateVariablesForCitekey(citekey);
+      },
+    );
 
     matchLibraryRender(templateVariables, expectedRender);
   });
 
   test('advanced template render', () => {
-    const render = renderAdvancedTemplate(loadLibrary, 'aitchison2017you');
+    const render = renderAdvancedTemplate(db, 'aitchison2017you');
     expect(render).toBe('[[Aitchison, Laurence]], [[Lengyel, Máté]]');
   });
 });
 
 describe('biblatex regression tests', () => {
+  const db = new CitationDatabase(undefined, buildFile('bib'));
+
   test('regression 7f9aefe (non-fatal parser error handling)', () => {
     const load = () => {
-      loadBibLaTeXLibrary(loadBibLaTeXEntries('regression_7f9aefe.bib'));
+      db.deserialize(loadBibLaTeXEntries('regression_7f9aefe.bib'));
     };
 
     expect(load).not.toThrow();
@@ -190,7 +185,7 @@ describe('biblatex regression tests', () => {
 
   test('regression fe15ef6 (fatal parser error handling)', () => {
     const load = () => {
-      loadBibLaTeXLibrary(loadBibLaTeXEntries('regression_fe15ef6.bib'));
+      db.deserialize(loadBibLaTeXEntries('regression_fe15ef6.bib'));
     };
 
     // Make sure we log warning
@@ -205,38 +200,33 @@ describe('biblatex regression tests', () => {
 });
 
 describe('csl library', () => {
-  let entries: EntryDataCSL[];
-  beforeEach(() => {
-    const cslPath = path.join(__dirname, 'library.json');
-    const csl = fs.readFileSync(cslPath, 'utf-8');
-    entries = deserializeEntries(csl, 'json') as EntryDataCSL[];
+  const db = new CitationDatabase(undefined, buildFile('json'));
+
+  beforeEach(async () => {
+    const csl = loadJsonEntries('library.json');
+    await db.deserialize(csl);
   });
 
   test('loads', () => {
-    expect(entries.length).toBe(5);
+    expect(db.size).toBe(5);
   });
 
-  function loadLibrary(): Library {
-    return new Library(entries, 'json');
-  }
-
   test('can support library', () => {
-    loadLibrary();
+    db.load();
   });
 
   test('renders correctly', () => {
-    const library = loadLibrary();
-    const templateVariables: Record<string, string>[] = Object.keys(
-      library.entries,
-    ).map((citekey) => {
-      return library.getTemplateVariablesForCitekey(citekey);
-    });
+    const templateVariables: Record<string, string>[] = Array.from(db.ids).map(
+      (citekey) => {
+        return db.getTemplateVariablesForCitekey(citekey);
+      },
+    );
 
     matchLibraryRender(templateVariables, expectedRender, BIBLATEX_FIELDS_ONLY);
   });
 
   test('advanced template render', () => {
-    const render = renderAdvancedTemplate(loadLibrary, 'aitchison2017you');
+    const render = renderAdvancedTemplate(db, 'aitchison2017you');
     expect(render).toBe('[[Aitchison, Laurence]], [[Lengyel, Máté]]');
   });
 });

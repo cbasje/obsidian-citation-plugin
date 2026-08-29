@@ -1,25 +1,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { CitationDatabase } from '../database';
+import { buildFile } from './utils';
 
-import { type EntryDataBibLaTeX } from '../types';
-import { deserializeEntries } from '../serializer';
-import { CslItemRegistry } from '../csl/registry';
-import { CiteprocEngine } from '../csl/engine';
-
-function loadBibLaTeXEntries(filename: string): EntryDataBibLaTeX[] {
+function loadBibLaTeXEntries(filename: string): string {
   const biblatexPath = path.join(__dirname, filename);
-  const biblatex = fs.readFileSync(biblatexPath, 'utf-8');
-  return deserializeEntries(biblatex, 'bib') as EntryDataBibLaTeX[];
+  return fs.readFileSync(biblatexPath, 'utf-8');
 }
 
 describe('Citation.js BibLaTeX → CSL conversion', () => {
-  let entries: EntryDataBibLaTeX[];
+  const db = new CitationDatabase(undefined, buildFile('bib'));
 
-  beforeEach(() => {
-    entries = loadBibLaTeXEntries('library.bib');
+  beforeEach(async () => {
+    await db.deserialize(loadBibLaTeXEntries('library.bib'));
   });
 
   test('maps core fields', () => {
+    const entries = Array.from(db.entries.values());
     const csl = entries[2]; // aitchison2017you
 
     expect(csl.id).toBe('aitchison2017you');
@@ -36,6 +33,7 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
   });
 
   test('maps authors', () => {
+    const entries = Array.from(db.entries.values());
     const csl = entries[2];
     expect(csl.author).toHaveLength(2);
     expect(csl.author[0]).toEqual({
@@ -45,6 +43,7 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
   });
 
   test('maps book type', () => {
+    const entries = Array.from(db.entries.values());
     const csl = entries[4]; // bar-ashersiegal2020perspectives
     expect(csl.type).toBe('book');
     expect(csl.publisher).toBe('Springer International Publishing');
@@ -52,12 +51,15 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
   });
 
   test('maps online type to webpage', () => {
+    const entries = Array.from(db.entries.values());
     const csl = entries[1]; // abnar2019blackbox
     expect(csl.type).toBe('webpage');
     expect(csl.URL).toBe('http://arxiv.org/abs/1906.01539');
   });
 
   test('preserves BibLaTeX-specific fields in _biblatex', () => {
+    const entries = Array.from(db.entriesRich.values());
+
     const entry1 = entries[1]; // abnar2019blackbox
     expect(entry1._biblatex?.properties.eprint).toBe('1906.01539');
     expect(entry1._biblatex?.properties.eprinttype).toBe('arxiv');
@@ -69,6 +71,8 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
   });
 
   test('preserves file field in _biblatex', () => {
+    const entries = Array.from(db.entriesRich.values());
+
     const entry0 = entries[0]; // Weiner2003
     expect(entry0._biblatex?.properties.file).toContain('Weiner');
 
@@ -78,55 +82,46 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
 });
 
 describe('CslItemRegistry', () => {
-  let entries: EntryDataBibLaTeX[];
+  const db = new CitationDatabase(undefined, buildFile('bib'));
 
-  beforeEach(() => {
-    entries = loadBibLaTeXEntries('library.bib');
+  beforeEach(async () => {
+    await db.deserialize(loadBibLaTeXEntries('library.bib'));
   });
 
   test('loads and retrieves items', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    const entries = Array.from(db.entries.values());
 
-    expect(reg.size).toBe(entries.length);
-    expect(reg.has('aitchison2017you')).toBe(true);
-    expect(reg.has('nonexistent')).toBe(false);
+    expect(db.size).toBe(entries.length);
+    expect(db.has('aitchison2017you')).toBe(true);
+    expect(db.has('nonexistent')).toBe(false);
 
-    const item = reg.retrieve('aitchison2017you');
+    const item = db.retrieve('aitchison2017you');
     expect(item.id).toBe('aitchison2017you');
     expect(item.title).toBeDefined();
   });
 });
 
 describe('CiteprocEngine integration', () => {
-  let entries: EntryDataBibLaTeX[];
+  const db = new CitationDatabase(undefined, buildFile('bib'));
 
-  beforeEach(() => {
-    entries = loadBibLaTeXEntries('library.bib');
+  beforeEach(async () => {
+    await db.deserialize(loadBibLaTeXEntries('library.bib'));
   });
 
-  test('renders an APA bibliography', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+  test('renders an APA bibliography', async () => {
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const html = engine.renderBibliography(['aitchison2017you']);
+    const html = db.citeEngine.renderBibliography(['aitchison2017you']);
     expect(html).toHaveLength(1);
     expect(html[0]).toContain('Aitchison');
     expect(html[0]).toContain('Lengyel');
     expect(html[0]).toContain('2017');
   });
 
-  test('renders multiple entries sorted', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+  test('renders multiple entries sorted', async () => {
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const html = engine.renderBibliography([
+    const html = db.citeEngine.renderBibliography([
       'aitchison2017you',
       'Weiner2003',
       'alexandrescu2006factored',
@@ -135,57 +130,41 @@ describe('CiteprocEngine integration', () => {
   });
 
   test('renders an in-text citation cluster', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const cluster = engine.renderCitationCluster(['aitchison2017you']);
+    const cluster = db.citeEngine.renderCitationCluster(['aitchison2017you']);
     expect(cluster).toContain('Aitchison');
     expect(cluster).toContain('2017');
   });
 
   test('renders with IEEE style', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('ieee');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('ieee');
-
-    const html = engine.renderBibliography(['aitchison2017you']);
+    const html = db.citeEngine.renderBibliography(['aitchison2017you']);
     expect(html).toHaveLength(1);
     expect(html[0]).toContain('Aitchison');
   });
 
   test('renders with Chicago author-date style', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('chicago-author-date');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('chicago-author-date');
-
-    const html = engine.renderBibliography(['aitchison2017you']);
+    const html = db.citeEngine.renderBibliography(['aitchison2017you']);
     expect(html).toHaveLength(1);
     expect(html[0]).toContain('Aitchison');
   });
 });
 
 describe('CiteprocEngine inline citations', () => {
-  let entries: EntryDataBibLaTeX[];
+  const db = new CitationDatabase(undefined, buildFile('bib'));
 
-  beforeEach(() => {
-    entries = loadBibLaTeXEntries('library.bib');
+  beforeEach(async () => {
+    await db.deserialize(loadBibLaTeXEntries('library.bib'));
   });
 
   test('renders a single inline citation', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const html = engine.renderInlineCitationsBatch([
+    const html = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you' }],
     ]);
     expect(html[0]).toContain('Aitchison');
@@ -193,13 +172,9 @@ describe('CiteprocEngine inline citations', () => {
   });
 
   test('renders multiple citations in one cluster', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const html = engine.renderInlineCitationsBatch([
+    const html = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you' }, { id: 'Weiner2003' }],
     ]);
     expect(html[0]).toContain('Aitchison');
@@ -207,50 +182,36 @@ describe('CiteprocEngine inline citations', () => {
   });
 
   test('renders suppress-author citation', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const html = engine.renderInlineCitationsBatch([
+    const html = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you', 'suppress-author': true }],
     ]);
     expect(html[0]).toContain('2017');
   });
 
   test('renders with locator', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const html = engine.renderInlineCitationsBatch([
+    const html = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you', locator: 'p. 220' }],
     ]);
     expect(html[0]).toContain('220');
   });
 
   test('returns empty for unknown citekeys', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const html = engine.renderInlineCitationsBatch([[{ id: 'nonexistent' }]]);
+    const html = db.citeEngine.renderInlineCitationsBatch([
+      [{ id: 'nonexistent' }],
+    ]);
     expect(html).toEqual(['']);
   });
 
   test('IEEE assigns correct citation numbers in batch', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('ieee');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('ieee');
-
-    const results = engine.renderInlineCitationsBatch([
+    const results = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you' }],
       [{ id: 'Weiner2003' }],
       [{ id: 'alexandrescu2006factored' }],
@@ -263,17 +224,13 @@ describe('CiteprocEngine inline citations', () => {
   });
 
   test('IEEE is stateless across repeated batch renders', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('ieee');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('ieee');
-
-    const first = engine.renderInlineCitationsBatch([
+    const first = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you' }],
       [{ id: 'Weiner2003' }],
     ]);
-    const second = engine.renderInlineCitationsBatch([
+    const second = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you' }],
       [{ id: 'Weiner2003' }],
     ]);
@@ -282,13 +239,9 @@ describe('CiteprocEngine inline citations', () => {
   });
 
   test('APA inline batch still works (author-date style)', () => {
-    const reg = new CslItemRegistry();
-    reg.load(entries);
+    db.citeEngine.configure('apa');
 
-    const engine = new CiteprocEngine(reg);
-    engine.configure('apa');
-
-    const results = engine.renderInlineCitationsBatch([
+    const results = db.citeEngine.renderInlineCitationsBatch([
       [{ id: 'aitchison2017you' }],
     ]);
 

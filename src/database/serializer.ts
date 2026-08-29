@@ -5,8 +5,7 @@ import type {
   EntryDataBibLaTeX,
   EntryDataCSL,
   FileType,
-} from './types';
-import { Temporal } from 'temporal-polyfill';
+} from '../types';
 
 /**
  * Parse raw database text into reference entries.
@@ -38,7 +37,7 @@ export function deserializeEntries(
       cslEntries = cite.data;
     } catch (err) {
       console.error(
-        'Citation plugin: fatal error loading BibLaTeX database:',
+        'Citation manager: fatal error loading BibLaTeX database:',
         err,
       );
       throw new Error('This file could not be parsed as BibLaTeX.', {
@@ -203,12 +202,8 @@ function cslToBibLatexProperties(entry: EntryDataCSL): Record<string, string> {
     const parts = entry.issued['date-parts'][0];
     if (parts.length === 1) {
       props.year = String(parts[0]);
-    } else {
-      props.date = Temporal.PlainDate.from({
-        year: parts.at(0),
-        month: parts.at(1),
-        day: parts.at(2),
-      }).toString();
+    } else if (parts.length === 3) {
+      props.date = parts.join('-');
     }
   }
   if (entry['container-title']) props.journaltitle = entry['container-title'];

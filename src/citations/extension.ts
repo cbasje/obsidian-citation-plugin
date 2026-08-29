@@ -4,9 +4,6 @@ import type CitationPlugin from '../main';
 import { inlineStateField } from './inlineState';
 import type { CitationRange } from './parse';
 
-export { inlineStateField };
-export type { CitationRange };
-
 /**
  * Per-view record of the last citation count emitted to the plugin's
  * event bus. Used so the first update of a freshly created editor (e.g.

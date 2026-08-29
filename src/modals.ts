@@ -60,7 +60,7 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
       }),
     ];
 
-    this.setLoading(this.plugin.isLibraryLoading);
+    this.setLoading(this.plugin.db.isLoading);
 
     // Don't immediately register keyevent listeners. If the modal was triggered
     // by an "Enter" keystroke (e.g. via the Obsidian command dialog), this event
@@ -76,11 +76,10 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
   }
 
   getItems(): EntryMetadata[] {
-    if (!this.plugin.library || this.plugin.isLibraryLoading) {
+    if (!this.plugin.db || this.plugin.db.isLoading) {
       return [];
     }
-
-    return Object.values(this.plugin.library.entries);
+    return Object.values(this.plugin.db.entries);
   }
 
   getItemText(item: EntryMetadata): string {
@@ -331,7 +330,7 @@ export class AddReferenceModal extends Modal {
       await this.onSubmit(this.idType, id);
       this.close();
     } catch (e) {
-      console.error('Citation plugin: add reference failed', e);
+      console.error('Citation manager: add reference failed', e);
       new Notice(
         e instanceof Error ? e.message : 'Failed to fetch reference.',
         5000,

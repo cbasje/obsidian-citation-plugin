@@ -1,5 +1,3 @@
-import type { TFile } from "obsidian";
-
 // Trick: allow string indexing onto object properties
 export interface IIndexable {
   [key: string]: any;
@@ -7,13 +5,6 @@ export interface IIndexable {
 
 export const fileTypes = ['bib', 'json'] as const;
 export type FileType = (typeof fileTypes)[number];
-
-export function getFileType(file: TFile | undefined): FileType | undefined {
-  const extension = (file?.extension || '').toLowerCase();
-  // @ts-expect-error This makes sense
-  if (fileTypes.includes(extension)) return extension as FileType;
-  return undefined;
-}
 
 export const CIT_VIEW_TYPE = 'citation-manager';
 export const CIT_ICON = 'quote';
@@ -76,7 +67,7 @@ export interface EntryMetadata {
  * Raw BibLaTeX entry as produced by Citation.js's `chainLink` parser.
  * Field names are lowercased. Values are strings.
  */
-export interface BibLaTeXRawEntry {
+interface BibLaTeXRawEntry {
   label: string;
   type: string;
   properties: Record<string, string>;
@@ -301,43 +292,6 @@ function parseFileEntry(
   if (url) return url;
 
   return undefined;
-}
-
-export class Library {
-  public entries: { [citekey: string]: EntryMetadata };
-
-  constructor(
-    entries: EntryData[],
-    extension: FileType,
-    basePath?: string,
-    vaultPath?: string,
-  ) {
-    this.entries = {};
-    for (const entry of entries) {
-      const id = (entry as EntryDataCSL).id;
-      this.entries[id] = getEntryMetadata(
-        id,
-        entry,
-        extension,
-        basePath,
-        vaultPath,
-      );
-    }
-  }
-
-  get size(): number {
-    return Object.keys(this.entries).length;
-  }
-
-  /**
-   * For the given citekey, return a flat object of template variables.
-   * All metadata fields are available both at the top level (`{{title}}`)
-   * and via `{{entry.title}}`.
-   */
-  getTemplateVariablesForCitekey(citekey: string): Record<string, any> {
-    const entry = this.entries[citekey];
-    return entry ? { entry, ...entry } : {};
-  }
 }
 
 export interface Author {
