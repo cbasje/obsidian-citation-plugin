@@ -1,10 +1,10 @@
 {
-  "id": "custom-citation-plugin",
-  "name": "Citation Manager",
-  "version": "0.5.1",
-  "minAppVersion": "1.0.0",
-  "description": "Automatically search, insert and manage citations from a Zotero library",
-  "author": "Sebastiaan Benjamins",
-  "authorUrl": "http://benjami.in",
-  "isDesktopOnly": false
+	"id": "custom-citation-plugin",
+	"name": "Citation Manager",
+	"version": "0.5.4",
+	"minAppVersion": "1.0.0",
+	"description": "Automatically search, insert and manage citations from a Zotero library",
+	"author": "Sebastiaan Benjamins",
+	"authorUrl": "http://benjami.in",
+	"isDesktopOnly": false
 }
