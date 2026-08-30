@@ -129,10 +129,15 @@ export default class CitationPlugin extends Plugin {
 
           // Watch for new literature notes and add initialContent
           if (this.isLiteratureNote(file)) {
-            const db = this.registry.peek(file.parent.path);
+            const dbFile = this.getDatabaseChild(file.parent.parent);
+            if (!dbFile) return;
+
+            const db = this.registry.peek(dbFile.path);
             if (db && db.paths.includes(file.path)) {
               const citekey = file.name.slice(1, -3); // @{{citekey}}.md
-              if (!citekey) return;
+              const entry = db.entries.has(citekey);
+              if (!entry) return;
+
               // Add initial content
               this.app.vault.modify(
                 file,
@@ -289,6 +294,10 @@ export default class CitationPlugin extends Plugin {
       file instanceof TFile &&
       file.parent.name === this.settings.literatureNoteFolder
     );
+  }
+
+  getDatabaseChild(parent: TFolder): TFile {
+    return parent.children.find((f) => DatabaseRegistry.isPotentialDatabase(f));
   }
 
   get literatureNoteTitleTemplate(): Template {

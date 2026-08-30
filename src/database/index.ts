@@ -21,7 +21,7 @@ export class CitationDatabase {
   readonly entries = new SvelteMap<string, EntryDataCSL>();
   readonly entriesRich = new SvelteMap<string, EntryMetadata>();
 
-  public file: TFile | undefined;
+  public _file: TFile | undefined;
   public path: string | undefined;
   public vaultPath: string | undefined;
 
@@ -36,7 +36,7 @@ export class CitationDatabase {
     if (typeof file === 'string') {
       this.path = file;
     } else {
-      this.file = file;
+      this._file = file;
       this.path = file?.path;
     }
     console.debug(`Citation manager: Creating database for '${this.path}'`);
@@ -45,13 +45,31 @@ export class CitationDatabase {
     this.vaultPath = plugin?.app.vault.adapter.getBasePath?.();
   }
 
-  async load(_raw?: string) {
-    if (this.isLoading) return;
+  async save() {
+    if (this.isLoading || !this.file) return;
 
-    if (!this.file && this.path) {
-      this.file = this.plugin.app.vault.getFileByPath(this.path);
+    console.debug('Citation manager: Saving database');
+    this.plugin?.events.trigger('library-save-start');
+
+    try {
+      const data = serializeEntries(
+        Array.from(this.entries.values()),
+        this.type,
+      );
+      await this.plugin.app.vault.modify(this.file, data);
+
+      this.plugin?.events.trigger('library-save-complete');
+      console.debug(
+        `Citation manager: successfully saved database with ${this.entries.size} entries.`,
+      );
+    } catch (e) {
+      console.error(e);
+      throw e;
     }
-    if (!this.file) return;
+  }
+
+  async load(_raw?: string) {
+    if (this.isLoading || !this.file) return;
 
     console.debug('Citation manager: (Re)loading database');
     this.plugin?.events.trigger('library-load-start');
@@ -86,6 +104,15 @@ export class CitationDatabase {
     } finally {
       this.isLoading = false;
     }
+  }
+
+  set file(f: TFile) {
+    this._file = f;
+  }
+
+  get file(): TFile {
+    if (this._file) return this._file;
+    if (this.path) return this.plugin.app.vault.getFileByPath(this.path);
   }
 
   get dir(): string {
