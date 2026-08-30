@@ -6,7 +6,7 @@ import {
   Setting,
 } from 'obsidian';
 import CitationPlugin from './main';
-import { type IIndexable, TEMPLATE_VARIABLES, fileTypes } from './types';
+import { type IIndexable, TEMPLATE_VARIABLES } from './types';
 import {
   CSL_LANGS,
   CSL_STYLES,
@@ -90,22 +90,23 @@ export class CitationSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Citation manager settings' });
 
-    const supportedFiles = this.app.vault
-      .getFiles()
-      // @ts-expect-error This is fine
-      .filter((f) => fileTypes.includes(f.extension))
-      .reduce((obj, f) => {
-        obj[f.path] = f.path;
-        return obj;
-      }, {});
+    const supportedFiles = Array.from(this.plugin.registry.paths)
+      .sort()
+      .reduce(
+        (obj, path) => {
+          obj[path] = path;
+          return obj;
+        },
+        {} as Record<string, string>,
+      );
 
     // NB: we force reload the library on path change.
     new Setting(containerEl)
       .setName('Default citation database')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-        'Only files inside the vault are possible. ' +
-        'Citations will be automatically reloaded whenever this file updates.',
+          'Only files inside the vault are possible. ' +
+          'Citations will be automatically reloaded whenever this file updates.',
       )
       .addDropdown((component) =>
         this.buildValueInput(
@@ -113,10 +114,12 @@ export class CitationSettingTab extends PluginSettingTab {
           'citationExportPath',
           (value) => {
             this.checkCitationExportPath(value).then((success) => {
-              if (success)
-                this.plugin.db
-                  .load()
+              if (success) {
+                this.plugin.registry.setMain(value);
+                this.plugin
+                  .loadDatabase()
                   .then(() => this.showCitationExportPathSuccess());
+              }
             });
           },
         ),
@@ -232,7 +235,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Custom CSL style path')
       .setDesc(
         'Optional path (relative to vault root) to a custom .csl file. ' +
-        'Overrides the style dropdown when set.',
+          'Overrides the style dropdown when set.',
       )
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', (value) => {
@@ -252,8 +255,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Render inline citations')
       .setDesc(
         'In reading view, replace Pandoc-style [@citekey] markers in the ' +
-        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
-        'The source text is unchanged.',
+          'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
+          'The source text is unchanged.',
       )
       .addToggle((toggle) =>
         toggle

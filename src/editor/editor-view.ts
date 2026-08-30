@@ -11,7 +11,7 @@ import { fetchEntryById, generateCiteKey, type IdType } from '../fetcher';
 import { AddReferenceModal } from '../modals';
 import Editor from './Editor.svelte';
 import { mount, unmount } from 'svelte';
-import { CitationDatabase } from '../database';
+import type { CitationDatabase } from '../database';
 
 export class EditorView extends TextFileView {
   /** Raw text last loaded from disk (fallback when serialization fails). */
@@ -54,7 +54,6 @@ export class EditorView extends TextFileView {
 
   clear(): void {
     console.log('clear');
-    this.db.clear();
     this.loaded = false;
     this.value = '';
   }
@@ -70,7 +69,7 @@ export class EditorView extends TextFileView {
   async onLoadFile(file: TFile) {
     console.log('onLoadFile');
 
-    this.db = new CitationDatabase(file, this.plugin);
+    this.db = this.plugin.registry.acquire(file.path);
     this.editor = mount(Editor, {
       target: this.contentEl,
       props: {
@@ -97,6 +96,10 @@ export class EditorView extends TextFileView {
     await super.onUnloadFile(file);
     if (this.editor) {
       unmount(this.editor);
+    }
+    if (this.db) {
+      this.plugin.registry.release(file.path);
+      this.db = undefined;
     }
   }
 

@@ -1,13 +1,10 @@
 import { Editor, Notice, MarkdownRenderChild } from 'obsidian';
 import References from './References.svelte';
 import { mount, unmount } from 'svelte';
-import type { CitationDatabase } from '../database';
 import { extractCitekeys } from '../citations/parse';
 import type CitationPlugin from '../main';
 
 export class ReferencesBlockView extends MarkdownRenderChild {
-  /** The database. */
-  private db: CitationDatabase | undefined;
   private block: ReturnType<typeof References> | undefined;
 
   constructor(
@@ -15,14 +12,13 @@ export class ReferencesBlockView extends MarkdownRenderChild {
     private plugin: CitationPlugin,
   ) {
     super(container);
-    this.db = plugin.db;
   }
 
   public onload(): void {
     this.block = mount(References, {
       target: this.container,
       props: {
-        db: this.db,
+        db: this.plugin.db,
       },
     });
   }

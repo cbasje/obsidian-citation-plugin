@@ -14,6 +14,7 @@ import CSL from 'citeproc';
 import type { Citation, CitationItem, CiteprocSys } from 'citeproc';
 import type { CiteOptions } from '../csl/assets';
 import { SvelteMap } from 'svelte/reactivity';
+export { DatabaseRegistry } from './registry';
 import '@citation-js/plugin-csl';
 
 export class CitationDatabase {

@@ -6,6 +6,7 @@ import {
   Plugin,
   TFile,
   TFolder,
+  TAbstractFile,
 } from 'obsidian';
 import {
   compile as compileTemplate,
@@ -21,7 +22,7 @@ import { EditorView } from './editor/editor-view';
 import { buildInlineCitationExtension } from './citations/extension';
 import { parseCitationGroup } from './citations/parse';
 import { StatusBarCounter } from './status-bar';
-import { CitationDatabase } from './database';
+import { DatabaseRegistry } from './database';
 import { ReferencesBlockView } from './references/references';
 
 export function getMarkdownCitationForCitekey(citekey: string): string {
@@ -32,7 +33,7 @@ export default class CitationPlugin extends Plugin {
   settings = new CitationsPluginSettings();
   events = new CitationEvents();
 
-  db: CitationDatabase | undefined;
+  registry!: DatabaseRegistry;
 
   // Template compilation options
   private templateSettings = {
@@ -42,6 +43,16 @@ export default class CitationPlugin extends Plugin {
   get editor(): Editor | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     return view ? view.editor : null;
+  }
+
+  /**
+   * Convenience accessor for the main database instance (the one bound
+   * to `settings.citationExportPath`). All existing call sites use
+   * `this.db.xxx` — this bridges them to the registry without touching
+   * every call site.
+   */
+  get db() {
+    return this.registry.main;
   }
 
   async loadSettings(): Promise<void> {
@@ -90,7 +101,7 @@ export default class CitationPlugin extends Plugin {
   async loadDatabase() {
     try {
       console.debug('loadDatabase');
-      await this.db.load();
+      await this.registry.main?.load();
     } catch (e) {
       new Notice(
         e instanceof Error
@@ -116,17 +127,46 @@ export default class CitationPlugin extends Plugin {
     const counter = new StatusBarCounter(this);
     counter.register();
 
+    this.registry = new DatabaseRegistry(this);
+    this.registry.discover();
+
     if (this.settings.citationExportPath) {
-      this.db = new CitationDatabase(this.settings.citationExportPath, this);
+      this.registry.setMain(this.settings.citationExportPath);
       this.loadDatabase();
 
       this.registerEvent(
+        this.app.vault.on('create', (file) => {
+          // Track new candidate database files in the registry.
+          if (DatabaseRegistry.isPotentialDatabase(file))
+            this.registry.add(file);
+        }),
+      );
+
+      this.registerEvent(
         this.app.vault.on('modify', (file) => {
-          // Watch for changes to the library file
-          if (file.path === this.settings.citationExportPath) {
-            this.loadDatabase();
-            return;
+          // Reload any registry-managed database whose file changed
+          // (covers both the main db and editor-opened databases).
+          if (DatabaseRegistry.isPotentialDatabase(file)) {
+            const db = this.registry.peek(file.path);
+            if (db) {
+              db.load();
+              return;
+            }
           }
+        }),
+      );
+
+      this.registerEvent(
+        this.app.vault.on('rename', (file, oldPath) => {
+          if (DatabaseRegistry.isPotentialDatabase(file))
+            this.registry.rename(oldPath, file.path);
+        }),
+      );
+
+      this.registerEvent(
+        this.app.vault.on('delete', (file) => {
+          if (DatabaseRegistry.isPotentialDatabase(file))
+            this.registry.remove(file.path);
         }),
       );
     }
@@ -211,6 +251,14 @@ export default class CitationPlugin extends Plugin {
 
     this.registerExtensions(fileTypes as unknown as string[], CIT_VIEW_TYPE);
     this.registerView(CIT_VIEW_TYPE, (leaf) => new EditorView(leaf, this));
+  }
+
+  async onunload(): Promise<void> {
+    // Release the permanent reference for the main database. The path
+    // entry is kept in `registry.paths`; only the instance is evicted.
+    if (this.settings.citationExportPath) {
+      this.registry.release(this.settings.citationExportPath);
+    }
   }
 
   async newDatabaseFile(folder?: TFolder) {
