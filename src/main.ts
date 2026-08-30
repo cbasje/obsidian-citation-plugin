@@ -100,7 +100,6 @@ export default class CitationPlugin extends Plugin {
 
   async loadDatabase() {
     try {
-      console.debug('loadDatabase');
       await this.registry.main?.load();
     } catch (e) {
       new Notice(
@@ -115,7 +114,6 @@ export default class CitationPlugin extends Plugin {
     console.debug(`Loading ${CIT_VIEW_TYPE} plugin`);
 
     await this.loadSettings();
-    console.debug('SETTING', this.settings);
 
     // Editor extension: render `[@citekey]` markers as formatted in-text
     // citations in Live Preview via CodeMirror Decorations. Re-registering
@@ -284,6 +282,7 @@ export default class CitationPlugin extends Plugin {
     try {
       const targetPath = targetFolder.path + '/Untitled.bib';
       const createdFile = await this.app.vault.create(targetPath, '');
+      this.registry.add(createdFile);
 
       await this.app.workspace.getLeaf().setViewState({
         type: CIT_VIEW_TYPE,

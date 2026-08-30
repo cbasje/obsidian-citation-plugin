@@ -19,8 +19,7 @@ export class CitationsPluginSettings {
 
   literatureNoteTitleTemplate = '@{{citekey}}';
   literatureNoteFolder = 'Reading notes';
-  literatureNoteContentTemplate = `
----
+  literatureNoteContentTemplate = `---
 title: {{title}}
 authors: {{authorString}}
 year: {{year}}
@@ -99,14 +98,18 @@ export class CitationSettingTab extends PluginSettingTab {
         },
         {} as Record<string, string>,
       );
+    console.debug(
+      `Citation manager: loaded ${this.plugin.registry.paths.size}`,
+      supportedFiles,
+    );
 
     // NB: we force reload the library on path change.
     new Setting(containerEl)
       .setName('Default citation database')
       .setDesc(
         'Path to citation library exported by your reference manager. ' +
-          'Only files inside the vault are possible. ' +
-          'Citations will be automatically reloaded whenever this file updates.',
+        'Only files inside the vault are possible. ' +
+        'Citations will be automatically reloaded whenever this file updates.',
       )
       .addDropdown((component) =>
         this.buildValueInput(
@@ -235,7 +238,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Custom CSL style path')
       .setDesc(
         'Optional path (relative to vault root) to a custom .csl file. ' +
-          'Overrides the style dropdown when set.',
+        'Overrides the style dropdown when set.',
       )
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', (value) => {
@@ -255,8 +258,8 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Render inline citations')
       .setDesc(
         'In reading view, replace Pandoc-style [@citekey] markers in the ' +
-          'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
-          'The source text is unchanged.',
+        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
+        'The source text is unchanged.',
       )
       .addToggle((toggle) =>
         toggle

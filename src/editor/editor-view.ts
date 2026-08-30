@@ -53,7 +53,6 @@ export class EditorView extends TextFileView {
   }
 
   clear(): void {
-    console.log('clear');
     this.loaded = false;
     this.value = '';
   }
@@ -67,8 +66,6 @@ export class EditorView extends TextFileView {
   }
 
   async onLoadFile(file: TFile) {
-    console.log('onLoadFile');
-
     this.db = this.plugin.registry.acquire(file.path);
     this.editor = mount(Editor, {
       target: this.contentEl,
@@ -108,7 +105,6 @@ export class EditorView extends TextFileView {
   }
 
   private async setValue(data: string) {
-    console.log('setValue');
     this.value = data;
 
     if (!this.db || !this.editor) {
@@ -120,7 +116,6 @@ export class EditorView extends TextFileView {
   }
 
   private getValue() {
-    console.log('getValue');
     if (!this.loaded || !this.db || !this.editor) {
       return this.value;
     }

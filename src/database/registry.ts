@@ -37,6 +37,7 @@ export class DatabaseRegistry {
     const files = this.plugin.app.vault.getFiles();
     for (const f of files) {
       if (DatabaseRegistry.isPotentialDatabase(f)) {
+        console.debug(`Citation manager: found ${f.path}`);
         this.paths.add(f.path);
       }
     }
