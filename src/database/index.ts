@@ -98,7 +98,7 @@ export class CitationDatabase {
 
   get paths() {
     return Array.from(this.entries.keys()).map((id) =>
-      this.plugin.getPathForCitekey(this.dir, id),
+      this.getPathForCitekey(this.dir, id),
     );
   }
 
@@ -148,6 +148,80 @@ export class CitationDatabase {
   getTemplateVariablesForCitekey(citekey: string): Record<string, any> {
     const entry = this.entriesRich.get(citekey);
     return entry ? { entry, ...entry } : {};
+  }
+
+  getTitleForCitekey(citekey: string): string {
+    const unsafeTitle = this.plugin.literatureNoteTitleTemplate(
+      this.getTemplateVariablesForCitekey(citekey),
+    );
+    return unsafeTitle.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_');
+  }
+
+  getPathForCitekey(basePath: string, citekey: string): string {
+    const title = this.getTitleForCitekey(citekey);
+    const notesFolder =
+      this.plugin.settings.literatureNoteFolder || 'Reading notes';
+    const notesSep = notesFolder && !notesFolder.endsWith('/') ? '/' : '';
+
+    const parentFolder = basePath;
+    const parentSep = parentFolder && !parentFolder.endsWith('/') ? '/' : '';
+
+    return normalizePath(
+      `${parentFolder}${parentSep}${notesFolder}${notesSep}${title}.md`,
+    );
+  }
+
+  getInitialContentForCitekey(citekey: string): string {
+    return this.plugin.literatureNoteContentTemplate(
+      this.getTemplateVariablesForCitekey(citekey),
+    );
+  }
+
+  /**
+   * Run a case-insensitive search for the literature note file corresponding to
+   * the given citekey. If no corresponding file is found, create one.
+   */
+  async getOrCreateLiteratureNoteFile(
+    basePath: string,
+    citekey: string,
+  ): Promise<TFile> {
+    const notePath = this.getPathForCitekey(basePath, citekey);
+
+    let file = this.plugin.app.vault.getAbstractFileByPath(notePath);
+    if (file == null) {
+      // First try a case-insensitive lookup.
+      const matches = this.plugin.app.vault
+        .getMarkdownFiles()
+        .filter((f) => f.path.toLowerCase() == notePath.toLowerCase());
+      if (matches.length > 0) {
+        file = matches[0];
+      } else {
+        try {
+          file = await this.plugin.app.vault.create(
+            notePath,
+            this.getInitialContentForCitekey(citekey),
+          );
+        } catch (exc) {
+          new Notice(
+            'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
+          );
+          throw exc;
+        }
+      }
+    }
+
+    return file as TFile;
+  }
+
+  async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
+    const source = this.plugin.app.vault.getFileByPath(
+      this.plugin.settings.citationExportPath,
+    );
+    this.getOrCreateLiteratureNoteFile(source.parent.path, citekey)
+      .then((file: TFile) => {
+        this.plugin.app.workspace.getLeaf(newPane).openFile(file);
+      })
+      .catch(console.error);
   }
 
   addCustomCitationStyle(input: string) {

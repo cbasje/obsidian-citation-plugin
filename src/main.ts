@@ -16,7 +16,6 @@ import CitationEvents from './events';
 import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
 import { fileTypes, type IIndexable, CIT_VIEW_TYPE, CIT_ICON } from './types';
-import { DISALLOWED_FILENAME_CHARACTERS_RE } from './util';
 import type { CitationItem } from 'citeproc';
 import { EditorView } from './editor/editor-view';
 import { buildInlineCitationExtension } from './citations/extension';
@@ -130,14 +129,16 @@ export default class CitationPlugin extends Plugin {
 
           // Watch for new literature notes and add initialContent
           if (this.isLiteratureNote(file)) {
-            const citekey = file.name.slice(1, -3); // @{{citekey}}.md
-            if (!citekey) return;
-
-            // Add initial content
-            this.app.vault.modify(
-              file,
-              this.getInitialContentForCitekey(citekey),
-            );
+            const db = this.registry.peek(file.parent.path);
+            if (db && db.paths.includes(file.path)) {
+              const citekey = file.name.slice(1, -3); // @{{citekey}}.md
+              if (!citekey) return;
+              // Add initial content
+              this.app.vault.modify(
+                file,
+                db.getInitialContentForCitekey(citekey),
+              );
+            }
             return;
           }
         }),
@@ -286,10 +287,7 @@ export default class CitationPlugin extends Plugin {
   isLiteratureNote(file: TAbstractFile): file is TFile {
     return (
       file instanceof TFile &&
-      file.parent.name === this.settings.literatureNoteFolder &&
-      this.db !== undefined &&
-      this.db.paths.length > 0 &&
-      this.db.paths.includes(file.path)
+      file.parent.name === this.settings.literatureNoteFolder
     );
   }
 
@@ -305,79 +303,6 @@ export default class CitationPlugin extends Plugin {
       this.settings.literatureNoteContentTemplate,
       this.templateSettings,
     );
-  }
-
-  getTitleForCitekey(citekey: string): string {
-    const unsafeTitle = this.literatureNoteTitleTemplate(
-      this.db.getTemplateVariablesForCitekey(citekey),
-    );
-    return unsafeTitle.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_');
-  }
-
-  getPathForCitekey(basePath: string, citekey: string): string {
-    const title = this.getTitleForCitekey(citekey);
-    const notesFolder = this.settings.literatureNoteFolder || 'Reading notes';
-    const notesSep = notesFolder && !notesFolder.endsWith('/') ? '/' : '';
-
-    const parentFolder = basePath;
-    const parentSep = parentFolder && !parentFolder.endsWith('/') ? '/' : '';
-
-    return normalizePath(
-      `${parentFolder}${parentSep}${notesFolder}${notesSep}${title}.md`,
-    );
-  }
-
-  getInitialContentForCitekey(citekey: string): string {
-    return this.literatureNoteContentTemplate(
-      this.db.getTemplateVariablesForCitekey(citekey),
-    );
-  }
-
-  /**
-   * Run a case-insensitive search for the literature note file corresponding to
-   * the given citekey. If no corresponding file is found, create one.
-   */
-  async getOrCreateLiteratureNoteFile(
-    basePath: string,
-    citekey: string,
-  ): Promise<TFile> {
-    const notePath = this.getPathForCitekey(basePath, citekey);
-
-    let file = this.app.vault.getAbstractFileByPath(notePath);
-    if (file == null) {
-      // First try a case-insensitive lookup.
-      const matches = this.app.vault
-        .getMarkdownFiles()
-        .filter((f) => f.path.toLowerCase() == notePath.toLowerCase());
-      if (matches.length > 0) {
-        file = matches[0];
-      } else {
-        try {
-          file = await this.app.vault.create(
-            notePath,
-            this.getInitialContentForCitekey(citekey),
-          );
-        } catch (exc) {
-          new Notice(
-            'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
-          );
-          throw exc;
-        }
-      }
-    }
-
-    return file as TFile;
-  }
-
-  async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
-    const source = this.app.vault.getFileByPath(
-      this.settings.citationExportPath,
-    );
-    this.getOrCreateLiteratureNoteFile(source.parent.path, citekey)
-      .then((file: TFile) => {
-        this.app.workspace.getLeaf(newPane).openFile(file);
-      })
-      .catch(console.error);
   }
 
   async insertMarkdownCitation(citekey: string): Promise<void> {
