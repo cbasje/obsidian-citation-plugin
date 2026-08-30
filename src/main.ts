@@ -139,6 +139,19 @@ export default class CitationPlugin extends Plugin {
           // Track new candidate database files in the registry.
           if (DatabaseRegistry.isPotentialDatabase(file))
             this.registry.add(file);
+
+          // Watch for new literature notes and add initialContent
+          if (this.isLiteratureNote(file)) {
+            const citekey = file.name.slice(1, -3); // @{{citekey}}.md
+            if (!citekey) return;
+
+            // Add initial content
+            this.app.vault.modify(
+              file,
+              this.getInitialContentForCitekey(citekey),
+            );
+            return;
+          }
         }),
       );
 
@@ -279,6 +292,16 @@ export default class CitationPlugin extends Plugin {
     } catch (e) {
       console.error('Error creating new citation database:', e);
     }
+  }
+
+  isLiteratureNote(file: TAbstractFile): file is TFile {
+    return (
+      file instanceof TFile &&
+      file.parent.name === this.settings.literatureNoteFolder &&
+      this.db !== undefined &&
+      this.db.paths.length > 0 &&
+      this.db.paths.includes(file.path)
+    );
   }
 
   get literatureNoteTitleTemplate(): Template {
