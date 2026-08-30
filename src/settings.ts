@@ -243,7 +243,7 @@ export class CitationSettingTab extends PluginSettingTab {
       .addText((input) =>
         this.buildValueInput(input, 'customCslStylePath', (value) => {
           this.plugin.settings.cslStyle = 'custom';
-          this.plugin.db.addCustomCitationStyle(value);
+          this.plugin.registry.main.addCustomCitationStyle(value);
         }),
       );
 
@@ -290,10 +290,10 @@ export class CitationSettingTab extends PluginSettingTab {
   }
 
   showCitationExportPathSuccess(): void {
-    if (!this.plugin.db) return;
+    if (!this.plugin.registry.main) return;
 
     this.citationPathSuccessEl?.setText(
-      `Loaded library with ${this.plugin.db.entries.size} references.`,
+      `Loaded library with ${this.plugin.registry.main.entries.size} references.`,
     );
     this.citationPathSuccessEl?.removeClass('d-none');
   }

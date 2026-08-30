@@ -60,7 +60,7 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
       }),
     ];
 
-    this.setLoading(this.plugin.db.isLoading);
+    this.setLoading(this.plugin.registry.main.isLoading);
 
     // Don't immediately register keyevent listeners. If the modal was triggered
     // by an "Enter" keystroke (e.g. via the Obsidian command dialog), this event
@@ -76,10 +76,10 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
   }
 
   getItems(): EntryMetadata[] {
-    if (!this.plugin.db || this.plugin.db.isLoading) {
+    if (!this.plugin.registry.main || this.plugin.registry.main.isLoading) {
       return [];
     }
-    return Object.values(this.plugin.db.entries);
+    return Array.from(this.plugin.registry.main.entriesRich.values());
   }
 
   getItemText(item: EntryMetadata): string {
@@ -104,7 +104,9 @@ class SearchModal extends FuzzySuggestModal<EntryMetadata> {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onChooseItem(item: EntryMetadata, evt: MouseEvent | KeyboardEvent): void {
-    this.plugin.openLiteratureNote(item.id, false).catch(console.error);
+    this.plugin.registry.main
+      .openLiteratureNote(item.id, false)
+      .catch(console.error);
   }
 
   renderSuggestion(match: FuzzyMatch<EntryMetadata>, el: HTMLElement): void {
@@ -205,7 +207,7 @@ export class OpenNoteModal extends SearchModal {
     if (evt instanceof MouseEvent || evt.key == 'Enter') {
       const newPane =
         evt instanceof KeyboardEvent && (evt as KeyboardEvent).ctrlKey;
-      this.plugin.openLiteratureNote(item.id, newPane);
+      this.plugin.registry.main.openLiteratureNote(item.id, newPane);
     } else if (evt.key == 'Tab') {
       if (evt.shiftKey) {
         const files = item.files || [];

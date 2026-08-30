@@ -18,7 +18,7 @@ export class ReferencesBlockView extends MarkdownRenderChild {
     this.block = mount(References, {
       target: this.container,
       props: {
-        db: this.plugin.db,
+        db: this.plugin.registry.main,
       },
     });
   }

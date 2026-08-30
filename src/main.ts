@@ -45,16 +45,6 @@ export default class CitationPlugin extends Plugin {
     return view ? view.editor : null;
   }
 
-  /**
-   * Convenience accessor for the main database instance (the one bound
-   * to `settings.citationExportPath`). All existing call sites use
-   * `this.db.xxx` — this bridges them to the registry without touching
-   * every call site.
-   */
-  get db() {
-    return this.registry.main;
-  }
-
   async loadSettings(): Promise<void> {
     const loadedSettings = await this.loadData();
     if (!loadedSettings) return;
@@ -456,7 +446,7 @@ export default class CitationPlugin extends Plugin {
 
     // Pass 3: render all citations as a batch (assigns correct numbers for
     // numeric styles like IEEE).
-    const rendered = this.db.renderInlineCitationsBatch(
+    const rendered = this.registry.main.renderInlineCitationsBatch(
       allCitations.map((c) => c.items),
     );
 
