@@ -75,7 +75,7 @@ export class EditorView extends TextFileView {
         app: this.app,
         db: this.db,
         getNotePath: (citekey: string) => {
-          return this.db.getPathForCitekey(this.file.parent.path, citekey);
+          return this.db.getPathForCitekey(citekey);
         },
         openAddModal: () => {
           new AddReferenceModal(this.app, (idType, id) =>

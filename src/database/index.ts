@@ -98,7 +98,7 @@ export class CitationDatabase {
 
   get paths() {
     return Array.from(this.entries.keys()).map((id) =>
-      this.getPathForCitekey(this.dir, id),
+      this.getPathForCitekey(id),
     );
   }
 
@@ -157,13 +157,13 @@ export class CitationDatabase {
     return unsafeTitle.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_');
   }
 
-  getPathForCitekey(basePath: string, citekey: string): string {
+  getPathForCitekey(citekey: string): string {
     const title = this.getTitleForCitekey(citekey);
     const notesFolder =
       this.plugin.settings.literatureNoteFolder || 'Reading notes';
     const notesSep = notesFolder && !notesFolder.endsWith('/') ? '/' : '';
 
-    const parentFolder = basePath;
+    const parentFolder = this.dir;
     const parentSep = parentFolder && !parentFolder.endsWith('/') ? '/' : '';
 
     return normalizePath(
@@ -181,11 +181,8 @@ export class CitationDatabase {
    * Run a case-insensitive search for the literature note file corresponding to
    * the given citekey. If no corresponding file is found, create one.
    */
-  async getOrCreateLiteratureNoteFile(
-    basePath: string,
-    citekey: string,
-  ): Promise<TFile> {
-    const notePath = this.getPathForCitekey(basePath, citekey);
+  async getOrCreateLiteratureNoteFile(citekey: string): Promise<TFile> {
+    const notePath = this.getPathForCitekey(citekey);
 
     let file = this.plugin.app.vault.getAbstractFileByPath(notePath);
     if (file == null) {
@@ -214,10 +211,7 @@ export class CitationDatabase {
   }
 
   async openLiteratureNote(citekey: string, newPane: boolean): Promise<void> {
-    const source = this.plugin.app.vault.getFileByPath(
-      this.plugin.settings.citationExportPath,
-    );
-    this.getOrCreateLiteratureNoteFile(source.parent.path, citekey)
+    this.getOrCreateLiteratureNoteFile(citekey)
       .then((file: TFile) => {
         this.plugin.app.workspace.getLeaf(newPane).openFile(file);
       })
