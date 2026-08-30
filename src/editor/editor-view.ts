@@ -6,6 +6,8 @@ import {
   type EntryDataCSL,
   CIT_VIEW_TYPE,
   CIT_ICON,
+  type EntryMetadata,
+  getEntryMetadata,
 } from '../types';
 import { fetchEntryById, generateCiteKey, type IdType } from '../fetcher';
 import { AddReferenceModal } from '../modals';
@@ -136,21 +138,15 @@ export class EditorView extends TextFileView {
 
     for (const entry of fetched) {
       entry.id = generateCiteKey(entry, this.db.ids);
-      const adapted = this.adaptEntry(entry);
+      const adapted = getEntryMetadata(
+        entry.id,
+        entry,
+        this.db.type,
+        this.db.dir,
+        this.db.vaultPath,
+      );
       this.db.add(adapted);
       this.requestSave();
     }
-  }
-
-  /**
-   * Adapt a fetched CSL-JSON entry for the current database type. For
-   * biblatex, attach an empty `_biblatex` so serialization uses the
-   * CSL-derived fallback rather than crashing on missing raw props.
-   */
-  private adaptEntry(entry: EntryDataCSL): EntryData {
-    if (this.db.type === 'bib') {
-      return { ...entry, _biblatex: undefined } as EntryDataBibLaTeX;
-    }
-    return entry;
   }
 }

@@ -1,7 +1,7 @@
-import type { TFile } from 'obsidian';
+import { normalizePath, Notice, type TFile } from 'obsidian';
+import { DISALLOWED_FILENAME_CHARACTERS_RE } from '../util';
 import {
   getEntryMetadata,
-  type EntryData,
   type EntryDataCSL,
   type EntryMetadata,
   type FileType,
@@ -19,11 +19,11 @@ import '@citation-js/plugin-csl';
 
 export class CitationDatabase {
   readonly entries = new SvelteMap<string, EntryDataCSL>();
-  readonly entriesRich = new SvelteMap<string, EntryData | EntryMetadata>();
+  readonly entriesRich = new SvelteMap<string, EntryMetadata>();
 
   public file: TFile | undefined;
   public path: string | undefined;
-  private vaultPath: string | undefined;
+  public vaultPath: string | undefined;
 
   public isLoading = false;
 
@@ -105,11 +105,11 @@ export class CitationDatabase {
   retrieve(id: string): EntryDataCSL | undefined {
     return this.entries?.get(id);
   }
-  retrieveRich(id: string): EntryData | EntryMetadata | undefined {
+  retrieveRich(id: string): EntryMetadata | undefined {
     return this.entriesRich?.get(id);
   }
 
-  add(entry: EntryData | EntryMetadata) {
+  add(entry: EntryMetadata) {
     this.entries.set(entry.id, entry);
     this.entriesRich.set(entry.id, entry);
   }
