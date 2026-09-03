@@ -126,6 +126,13 @@ export class CitationSettingTab extends PluginSettingTab {
             });
           },
         ),
+      )
+      .addButton((button) =>
+        button.setButtonText('(Re)load database').onClick(() => {
+          this.plugin
+            .loadDatabase()
+            .then(() => this.showCitationExportPathSuccess());
+        }),
       );
 
     this.citationPathLoadingEl = containerEl.createEl('p', {
