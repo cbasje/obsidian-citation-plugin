@@ -107,8 +107,8 @@ export class CitationSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Default citation database')
       .setDesc(
-        'Path to citation library exported by your reference manager. ' +
-        'Only files inside the vault are possible. ' +
+        'Path to the default citation database (.bib, .ris or .json files) to use with the plugin. ' +
+        'If you export the database from your reference manager, make sure it is inside the vault. ' +
         'Citations will be automatically reloaded whenever this file updates.',
       )
       .addDropdown((component) =>

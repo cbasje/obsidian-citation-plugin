@@ -1,0 +1,35 @@
+TY  - JOUR
+ID  - Weiner2003
+AU  - Weiner, S.
+TI  - An Overview of Biomineralization Processes and the Problem of the Vital Effect
+T2  - Rev. Mineral. Geochemistry
+PY  - 2003
+SP  - 1
+EP  - 29
+DO  - 10.2113/0540001
+UR  - http://rimg.geoscienceworld.org/cgi/doi/10.2113/0540001
+L2  - https://example.org/weiner2003.pdf
+AB  - Biomineralization links soft organic tissues with the hard materials of the solid Earth.
+ER  - 
+
+TY  - BOOK
+ID  - smith2019
+AU  - Smith, Jane
+TI  - Another book
+PB  - Publisher
+CY  - Amsterdam
+PY  - 2019
+ER  - 
+
+TY  - CPAPER
+ID  - alexandrescu2006factoredneural
+AU  - Alexandrescu, Andrei
+AU  - Kirchhoff, Katrin
+TI  - Factored Neural Language Models
+T2  - Proceedings of the HLT-NAACL Companion Volume
+PY  - 2006
+SP  - 1
+EP  - 4
+AN  - N06-2001
+L1  - file:///Users/sebastiaan/Documents/papers/alexandrescu2006.pdf
+ER  - 

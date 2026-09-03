@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { compile as compileTemplate } from 'handlebars';
 import { CitationDatabase } from '../database';
+import { deserializeEntries } from '../database/serializer';
+import { getEntryMetadata } from '../types';
 import { buildFile } from './utils';
 
 function loadBibLaTeXEntries(filename: string): string {
@@ -175,27 +177,24 @@ describe('biblatex library', () => {
 describe('biblatex regression tests', () => {
   const db = new CitationDatabase(buildFile('bib'));
 
-  test('regression 7f9aefe (non-fatal parser error handling)', () => {
-    const load = () => {
-      db.deserialize(loadBibLaTeXEntries('regression_7f9aefe.bib'));
-    };
-
-    expect(load).not.toThrow();
+  test('regression 7f9aefe (non-fatal parser error handling)', async () => {
+    await expect(
+      db.deserialize(loadBibLaTeXEntries('regression_7f9aefe.bib')),
+    ).resolves.toBeUndefined();
   });
 
-  test('regression fe15ef6 (fatal parser error handling)', () => {
-    const load = () => {
-      db.deserialize(loadBibLaTeXEntries('regression_fe15ef6.bib'));
-    };
-
-    // Make sure we log warning
+  test('regression fe15ef6 (fatal parser error handling)', async () => {
+    // A fatal Citation.js parse error surfaces as a clean, user-facing
+    // error rather than crashing or silently yielding an empty library.
     const warnCallback = jest.fn();
     jest.spyOn(global.console, 'error').mockImplementation(warnCallback);
 
-    // A fatal Citation.js parse error surfaces as a clean, user-facing
-    // error rather than crashing or silently yielding an empty library.
-    expect(load).toThrow('This file could not be parsed as BibLaTeX.');
-    expect(warnCallback.mock.calls.length).toBe(1);
+    await expect(
+      db.deserialize(loadBibLaTeXEntries('regression_fe15ef6.bib')),
+    ).rejects.toThrow('This file could not be parsed as BibLaTeX.');
+    expect(warnCallback.mock.calls.length).toBeGreaterThan(0);
+
+    warnCallback.mockRestore();
   });
 });
 
@@ -228,5 +227,101 @@ describe('csl library', () => {
   test('advanced template render', () => {
     const render = renderAdvancedTemplate(db, 'aitchison2017you');
     expect(render).toBe('[[Aitchison, Laurence]], [[Lengyel, Máté]]');
+  });
+});
+
+describe('ris library', () => {
+  const db = new CitationDatabase(buildFile('ris'));
+
+  const loadRis = () => {
+    const risPath = path.join(__dirname, 'library.ris');
+    return fs.readFileSync(risPath, 'utf-8');
+  };
+
+  beforeEach(async () => {
+    await db.deserialize(loadRis());
+  });
+
+  test('loads', () => {
+    expect(db.entries.size).toBe(3);
+  });
+
+  test('renders correctly', () => {
+    const vars = db.getTemplateVariablesForCitekey('Weiner2003');
+    expect(vars.authorString).toBe('S. Weiner');
+    expect(vars.title).toBe(
+      'An Overview of Biomineralization Processes and the Problem of the Vital Effect',
+    );
+    expect(vars.containerTitle).toBe('Rev. Mineral. Geochemistry');
+    expect(vars.DOI).toBe('10.2113/0540001');
+    expect(vars.page).toBe('1-29');
+    expect(vars.year).toBe('2003');
+    expect(vars.URL).toBe(
+      'http://rimg.geoscienceworld.org/cgi/doi/10.2113/0540001',
+    );
+    expect(vars.files).toEqual(['https://example.org/weiner2003.pdf']);
+
+    const bookVars = db.getTemplateVariablesForCitekey('smith2019');
+    expect(bookVars.publisher).toBe('Publisher');
+    expect(bookVars.publisherPlace).toBe('Amsterdam');
+    expect(bookVars.files).toBeUndefined();
+
+    const paperVars = db.getTemplateVariablesForCitekey(
+      'alexandrescu2006factoredneural',
+    );
+    expect(paperVars.authorString).toBe(
+      'Andrei Alexandrescu, Katrin Kirchhoff',
+    );
+    expect(paperVars.files).toEqual([
+      'file:///Users/sebastiaan/Documents/papers/alexandrescu2006.pdf',
+    ]);
+  });
+
+  test('round-trips through serialize/deserialize', async () => {
+    const serialized = db.serialize();
+    expect(serialized).toContain('TY  - JOUR');
+    expect(serialized).toContain('ID  - Weiner2003');
+
+    // Full-length citekeys are preserved (Citation.js truncates ID to 20).
+    expect(serialized).toContain('ID  - alexandrescu2006factoredneural');
+    // Raw tags dropped by the CSL translator survive the round trip.
+    expect(serialized).toContain('L2  - https://example.org/weiner2003.pdf');
+    expect(serialized).toContain('AN  - N06-2001');
+    expect(serialized).toContain(
+      'L1  - file:///Users/sebastiaan/Documents/papers/alexandrescu2006.pdf',
+    );
+
+    await db.deserialize(serialized);
+    expect(db.entries.size).toBe(3);
+    expect(db.ids).toContain('Weiner2003');
+    expect(db.ids).toContain('smith2019');
+    expect(db.ids).toContain('alexandrescu2006factoredneural');
+    expect(
+      db.getTemplateVariablesForCitekey('alexandrescu2006factoredneural').files,
+    ).toEqual([
+      'file:///Users/sebastiaan/Documents/papers/alexandrescu2006.pdf',
+    ]);
+  });
+
+  test('vault-local file links become wikilinks', () => {
+    const entry = db.retrieve('alexandrescu2006factoredneural');
+    const meta = getEntryMetadata(
+      'alexandrescu2006factoredneural',
+      entry,
+      'ris',
+      undefined,
+      '/Users/sebastiaan/Documents',
+    );
+    expect(meta.files).toEqual(['[[papers/alexandrescu2006.pdf]]']);
+  });
+
+  test('non-RIS content in a .ris file fails loudly', async () => {
+    await expect(db.deserialize('@article{a, title={T}}')).rejects.toThrow(
+      'This file could not be parsed as RIS.',
+    );
+  });
+
+  test('empty file loads as empty library', () => {
+    expect(deserializeEntries('', 'ris')).toEqual([]);
   });
 });

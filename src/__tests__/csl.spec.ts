@@ -58,7 +58,7 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
   });
 
   test('preserves BibLaTeX-specific fields in _biblatex', () => {
-    const entries = Array.from(db.entriesRich.values());
+    const entries = Array.from(db.entries.values());
 
     const entry1 = entries[1]; // abnar2019blackbox
     expect(entry1._biblatex?.properties.eprint).toBe('1906.01539');
@@ -71,7 +71,7 @@ describe('Citation.js BibLaTeX → CSL conversion', () => {
   });
 
   test('preserves file field in _biblatex', () => {
-    const entries = Array.from(db.entriesRich.values());
+    const entries = Array.from(db.entries.values());
 
     const entry0 = entries[0]; // Weiner2003
     expect(entry0._biblatex?.properties.file).toContain('Weiner');

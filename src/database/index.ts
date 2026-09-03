@@ -82,6 +82,8 @@ export class CitationDatabase {
       } else {
         raw = await this.plugin?.app.vault.read(this.file);
       }
+      // No plugin/vault available (e.g. unit tests): nothing to load.
+      if (raw === undefined) return;
       const entries = deserializeEntries(raw, this.type);
 
       this.clear();

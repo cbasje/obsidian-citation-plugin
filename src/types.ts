@@ -3,7 +3,7 @@ export interface IIndexable {
   [key: string]: any;
 }
 
-export const fileTypes = ['bib', 'json'] as const;
+export const fileTypes = ['bib', 'json', 'ris'] as const;
 export type FileType = (typeof fileTypes)[number];
 
 export const CIT_VIEW_TYPE = 'citation-manager';
@@ -74,8 +74,8 @@ interface BibLaTeXRawEntry {
 }
 
 /**
- * Extract a flat metadata object from a parsed reference entry, for either
- * CSL-JSON or BibLaTeX databases.
+ * Extract a flat metadata object from a parsed reference entry, for CSL-JSON
+ * and RIS databases (both parse to plain CSL-JSON) or BibLaTeX databases.
  */
 export function getEntryMetadata(
   citekey: string,
@@ -84,24 +84,75 @@ export function getEntryMetadata(
   basePath?: string,
   vaultPath?: string,
 ): EntryMetadata {
-  return extension === 'json'
-    ? getCSLMetadata(citekey, entry as EntryDataCSL)
-    : getBibLaTeXMetadata(
+  if (extension === 'bib') {
+    return getBibLaTeXMetadata(
       citekey,
       entry as EntryDataBibLaTeX,
       basePath,
       vaultPath,
     );
+  }
+  if (extension === 'ris') {
+    return getRisMetadata(citekey, entry as EntryDataRis, vaultPath);
+  }
+  return getCSLMetadata(citekey, entry as EntryDataCSL);
+}
+
+/**
+ * Extract metadata from an RIS entry: plain CSL metadata, plus `files`
+ * populated from the raw `L1`/`L2`/`L3` file-link tags (preserved under
+ * `_ris`), which the CSL translator drops.
+ */
+function getRisMetadata(
+  citekey: string,
+  data: EntryDataRis,
+  vaultPath?: string,
+): EntryMetadata {
+  const base = getCSLMetadata(citekey, data);
+
+  const files: string[] = [];
+  const raw = data._ris;
+  if (raw) {
+    for (const tag of ['L1', 'L2', 'L3']) {
+      const links = ([] as (string | undefined)[]).concat(raw[tag] ?? []);
+      for (const link of links) {
+        const file = parseRisFileLink(link, vaultPath);
+        if (file) files.push(file);
+      }
+    }
+  }
+
+  return { ...base, files: files.length > 0 ? files : undefined };
+}
+
+/**
+ * Convert a raw RIS file link (`L1`/`L2`/`L3`) into a usable link: a
+ * `file://` path inside the vault becomes a vault-relative wikilink,
+ * anything else (URL or external path) is kept as-is.
+ */
+function parseRisFileLink(
+  link: string | undefined,
+  vaultPath?: string,
+): string | undefined {
+  const s = link?.trim();
+  if (!s) return undefined;
+
+  const FILE_URL_PREFIX = 'file://';
+  if (vaultPath && s.startsWith(FILE_URL_PREFIX + vaultPath + '/')) {
+    const relative = s.slice(FILE_URL_PREFIX.length + vaultPath.length + 1);
+    return `[[${relative}]]`;
+  }
+  return s;
 }
 
 function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
   const authorString = data.author
     ? data.author
-      .map((a) => {
-        if (a.literal) return a.literal;
-        return [a.given, a.family].filter(Boolean).join(' ');
-      })
-      .join(', ')
+        .map((a) => {
+          if (a.literal) return a.literal;
+          return [a.given, a.family].filter(Boolean).join(' ');
+        })
+        .join(', ')
     : undefined;
 
   const year = data.issued?.['date-parts']?.[0]?.[0]?.toString();
@@ -149,11 +200,11 @@ function getBibLaTeXMetadata(
   // Author string from CSL authors (parsed into {given, family} by Citation.js)
   const authorString = data.author
     ? data.author
-      .map((a) => {
-        if (a.literal) return a.literal;
-        return [a.given, a.family].filter(Boolean).join(' ');
-      })
-      .join(', ')
+        .map((a) => {
+          if (a.literal) return a.literal;
+          return [a.given, a.family].filter(Boolean).join(' ');
+        })
+        .join(', ')
     : undefined;
 
   // Container title: prefer CSL, fall back to raw BibLaTeX fields, then
@@ -310,7 +361,20 @@ export type EntryDataBibLaTeX = EntryDataCSL & {
   _biblatex?: BibLaTeXRawEntry;
 };
 
-export type EntryData = EntryDataCSL | EntryDataBibLaTeX;
+/**
+ * Raw RIS record (tag → value; repeated tags such as `AU` or `KW` become
+ * arrays), as parsed from the file. Only present when the database type is
+ * RIS.
+ */
+export interface RisRawEntry {
+  [tag: string]: string | string[];
+}
+
+export type EntryDataRis = EntryDataCSL & {
+  _ris?: RisRawEntry;
+};
+
+export type EntryData = EntryDataCSL | EntryDataBibLaTeX | EntryDataRis;
 
 export interface EntryDataCSL {
   id: string;

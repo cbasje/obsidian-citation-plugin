@@ -88,6 +88,11 @@ declare module '@citation-js/plugin-csl' {
   // Side-effect import: registers CSL output format with @citation-js/core.
 }
 
+declare module '@citation-js/plugin-ris' {
+  // Side-effect import: registers RIS input and output formats with
+  // @citation-js/core.
+}
+
 declare module '@citation-js/plugin-doi' {
   // Side-effect import: registers DOI input format with @citation-js/core.
 }

@@ -4,7 +4,7 @@ This plugin for [Obsidian](https://obsidian.md) integrates your academic referen
 
 ![](screenshot.png)
 
-The plugin supports reading bibliographies in [BibTeX / BibLaTeX `.bib` format][4] and [CSL-JSON format][1].
+The plugin supports reading bibliographies in [BibTeX / BibLaTeX `.bib` format][4], [CSL-JSON format][1], and [RIS format][5].
 
 ## Setup
 
@@ -18,7 +18,7 @@ Once the plugin is installed, you must provide it with a bibliography file:
   - You can optionally choose "Keep updated" to automatically re-export the collection -- this is recommended!
 - If you use other reference managers, check their documentation for BibLaTeX or CSL-JSON export support. We plan to officially support other managers in the future.
 
-Now open the Obsidian preferences and view the "Citations" tab. Paste the path to the exported file (`.bib` or `.json`, depending on the format you chose) in the text field labeled "Citation export path." After closing the settings dialog, you should now be able to search your references from within Obsidian!
+Now open the Obsidian preferences and view the "Citations" tab. Paste the path to the exported file (`.bib`, `.json`, or `.ris`, depending on the format you chose) in the text field labeled "Citation export path." After closing the settings dialog, you should now be able to search your references from within Obsidian!
 
 ## Usage
 
@@ -75,3 +75,4 @@ MIT License.
 [2]: https://retorque.re/zotero-better-bibtex/
 [3]: https://pandoc.org/MANUAL.html#extension-citations
 [4]: http://www.bibtex.org/
+[5]: https://en.wikipedia.org/wiki/RIS_(file_format)

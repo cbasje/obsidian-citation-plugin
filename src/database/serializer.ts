@@ -1,24 +1,30 @@
 import { Cite, plugins, type CSL } from '@citation-js/core';
 import '@citation-js/plugin-bibtex';
+import '@citation-js/plugin-ris';
 import type {
   EntryData,
   EntryDataBibLaTeX,
   EntryDataCSL,
+  EntryDataRis,
   FileType,
+  RisRawEntry,
 } from '../types';
 
 /**
  * Parse raw database text into reference entries.
  *
  * Throws an `Error` with a human-readable message when the input cannot be
- * parsed or fails validation (CSL-JSON shape checks, BibLaTeX parse
+ * parsed or fails validation (CSL-JSON shape checks, BibLaTeX or RIS parse
  * failures, or an empty result). The thrown `Error.message` is suitable
  * for direct display to the user.
  *
  * For BibLaTeX, Citation.js parses the input into CSL-JSON (for citeproc)
  * and the raw BibLaTeX properties are attached under `_biblatex` so that
  * `serializeEntries` can round-trip BibLaTeX-specific fields (`file`,
- * `eprint`, `eprinttype`, raw LaTeX `note`).
+ * `eprint`, `eprinttype`, raw LaTeX `note`). RIS parses directly to
+ * CSL-JSON (entries without an `ID` tag get a generated id), with the raw
+ * RIS tags attached under `_ris` to round-trip fields the CSL translator
+ * drops (`L1`/`L2`/`L3` file links, `AN`, custom tags).
  */
 export function deserializeEntries(
   databaseRaw: string,
@@ -69,7 +75,100 @@ export function deserializeEntries(
     });
   }
 
+  if (extension === 'ris') {
+    // Empty (e.g. newly created) files load as an empty library.
+    if (!databaseRaw.trim()) return [];
+
+    // Strictly require RIS content, so a misnamed .bib/.json file fails
+    // loudly instead of being parsed by another registered input format.
+    if (plugins.input.type(databaseRaw) !== '@ris/file') {
+      throw new Error('This file could not be parsed as RIS.');
+    }
+
+    let cslEntries: CSL[];
+    try {
+      cslEntries = new Cite(databaseRaw).data;
+    } catch (err) {
+      console.error('Citation manager: fatal error loading RIS database:', err);
+      throw new Error('This file could not be parsed as RIS.', {
+        cause: err,
+      });
+    }
+
+    // Also parse raw records (in file order) to preserve RIS-specific tags
+    // that the CSL translator drops (L1/L2/L3 file links, AN, custom tags).
+    // Only attach them when the record count matches, so a parse mismatch
+    // can never misalign raw records with parsed entries.
+    const rawRecords =
+      cslEntries.length > 0 ? parseRawRisRecords(databaseRaw) : [];
+    const aligned = rawRecords.length === cslEntries.length;
+
+    // Strip Citation.js provenance graph to save memory.
+    return cslEntries.map((csl, i) => {
+      const { _graph, ...cleanCsl } = csl as Record<string, unknown>;
+      return aligned
+        ? ({ ...cleanCsl, _ris: rawRecords[i] } as EntryDataRis)
+        : (cleanCsl as EntryDataRis);
+    });
+  }
+
   throw new Error(`Unsupported file extension: ${extension}.`);
+}
+
+const RIS_LINE_MATCH = /^[A-Z][A-Z0-9] {2}-( |$)/;
+const RIS_LINE_SPLIT = / {2}-(?: |$)/;
+
+/**
+ * Parse raw RIS text into per-record tag maps, mirroring Citation.js's own
+ * line parsing (tag regex, continuation-line joining, repeated tags becoming
+ * arrays). Records are returned in file order, matching the order of the
+ * entries produced by the CSL translator.
+ */
+function parseRawRisRecords(raw: string): RisRawEntry[] {
+  const records: RisRawEntry[] = [];
+  let current: RisRawEntry | undefined;
+  let lastTag: string | undefined;
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!RIS_LINE_MATCH.test(trimmed)) {
+      // Continuation of a wrapped value line.
+      if (trimmed && current && lastTag) {
+        const value = current[lastTag];
+        if (Array.isArray(value)) {
+          const last = value.length - 1;
+          value[last] = `${value[last]} ${trimmed}`;
+        } else {
+          current[lastTag] = `${value} ${trimmed}`;
+        }
+      }
+      continue;
+    }
+
+    const [tag, value = ''] = trimmed.split(RIS_LINE_SPLIT) as [
+      string,
+      string?,
+    ];
+    if (tag === 'ER') {
+      current = undefined;
+      lastTag = undefined;
+      continue;
+    }
+    if (tag === 'TY') {
+      current = {};
+      records.push(current);
+    }
+    if (!current) continue;
+
+    if (Array.isArray(current[tag])) {
+      current[tag].push(value);
+    } else {
+      current[tag] = current[tag] ? [current[tag], value] : value;
+    }
+    lastTag = tag;
+  }
+
+  return records;
 }
 
 /**
@@ -107,7 +206,7 @@ function validateCslJsonEntries(entries: EntryDataCSL[]): void {
     ) {
       throw new Error(
         'This file is not valid CSL-JSON: every entry must have ' +
-        'string "id" and "type" fields.',
+          'string "id" and "type" fields.',
       );
     }
   }
@@ -119,6 +218,10 @@ function validateCslJsonEntries(entries: EntryDataCSL[]): void {
  * `deserializeEntries` yields an equivalent set of entries.
  *
  * For CSL-JSON the output is a pretty-printed JSON array.
+ * For RIS the output is produced by Citation.js's RIS output format, with
+ * the raw `_ris` tags (preserved by `deserializeEntries`) re-attached for
+ * fields the CSL translator drops (L1/L2/L3 file links, AN, custom tags),
+ * and full-length `ID` citekeys (Citation.js truncates `ID` to 20 chars).
  * For BibLaTeX each entry is reconstructed from the raw `_biblatex`
  * properties (preserved by `deserializeEntries` via `chainLink`), which
  * keeps BibLaTeX-specific fields (`file`, `eprint`, `eprinttype`, raw
@@ -132,13 +235,119 @@ export function serializeEntries(
   if (extension === 'json') {
     return serializeCslJson(entries as EntryDataCSL[]);
   }
+  if (extension === 'ris') {
+    return serializeRis(entries as EntryDataRis[]);
+  }
   return serializeBibLaTeX(entries as EntryDataBibLaTeX[]);
+}
+
+/**
+ * Serialize entries to RIS via Citation.js's RIS output format. Internal
+ * fields (`citekey`, `_biblatex`, `_ris`, `_graph`) are stripped first;
+ * unknown CSL fields are ignored by the RIS translator.
+ */
+function serializeRis(entries: EntryDataRis[]): string {
+  const clean = entries.map((entry) => {
+    const { citekey, _biblatex, _ris, _graph, ...rest } =
+      entry as EntryDataRis & {
+        citekey?: unknown;
+        _biblatex?: unknown;
+        _graph?: unknown;
+      };
+    return rest;
+  });
+
+  let output: string;
+  try {
+    // The 'ris' output format always returns a single string.
+    output = new Cite(clean).format('ris') as string;
+  } catch (err) {
+    console.error(
+      'Citation manager: fatal error serializing RIS database:',
+      err,
+    );
+    throw new Error('These entries could not be serialized as RIS.', {
+      cause: err,
+    });
+  }
+
+  if (output) {
+    // Citation.js truncates `ID` to 20 characters on output; restore the
+    // full-length citekey of the corresponding entry.
+    output = restoreRisIds(output, clean);
+    // Re-attach raw tags the CSL translator dropped, so saving does not
+    // lose file links, accession numbers, or custom tags.
+    output = mergeRawRisTags(output, entries);
+  }
+
+  return output ? `${output}\n` : '';
+}
+
+/**
+ * Replace each `ID  - ` line in the formatted output with the full-length
+ * id of the corresponding entry (blocks appear in the same order as the
+ * entries passed to the formatter).
+ */
+function restoreRisIds(output: string, entries: { id: string }[]): string {
+  const lines = output.split('\n');
+  let block = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (/^TY {2}- /.test(line)) block++;
+    if (/^ID {2}- /.test(line)) {
+      const id = entries[block]?.id;
+      if (id) lines[i] = `ID  - ${id}`;
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * For each formatted block, append the entry's raw `_ris` tags that the
+ * formatter did not emit (e.g. L1/L2/L3, AN, custom tags), so they survive
+ * load → save round trips. Tags already present in the block are left as
+ * formatted (edits made through the plugin win over the raw values).
+ */
+function mergeRawRisTags(output: string, entries: EntryDataRis[]): string {
+  const lines = output.split('\n');
+  const result: string[] = [];
+  const seenTags = new Set<string>();
+  let block = -1;
+
+  for (const line of lines) {
+    if (/^TY {2}- /.test(line)) {
+      block++;
+      seenTags.clear();
+    }
+
+    const tagMatch = /^([A-Z][A-Z0-9]) {2}- /.exec(line);
+    if (tagMatch) seenTags.add(tagMatch[1]!);
+
+    if (/^ER {2}- ?$/.test(line)) {
+      const raw = entries[block]?._ris;
+      if (raw) {
+        for (const [tag, value] of Object.entries(raw)) {
+          if (tag === 'TY' || tag === 'ER' || seenTags.has(tag)) continue;
+          for (const v of ([] as string[]).concat(value)) {
+            if (v !== undefined && v !== null) result.push(`${tag}  - ${v}`);
+          }
+        }
+      }
+    }
+
+    result.push(line);
+  }
+
+  return result.join('\n');
 }
 
 function serializeCslJson(entries: EntryDataCSL[]): string {
   const clean = entries.map((entry) => {
-    const { _biblatex, _graph, ...rest } = entry as EntryDataCSL & {
+    const { _biblatex, _ris, _graph, ...rest } = entry as EntryDataCSL & {
       _biblatex?: unknown;
+      _ris?: unknown;
       _graph?: unknown;
     };
     return rest;
