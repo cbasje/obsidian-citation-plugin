@@ -34,7 +34,6 @@ year: {{year}}
   cslStyle: CSL_STYLE_ID | 'custom' = 'apa';
   customCslStylePath = '';
   cslLanguage: CSL_LANG | string = 'en-US';
-  renderInlineCitations = true;
 }
 
 export class CitationSettingTab extends PluginSettingTab {
@@ -259,22 +258,6 @@ export class CitationSettingTab extends PluginSettingTab {
       .setDesc('Language used for bibliography rendering.')
       .addDropdown((component) =>
         this.buildValueInput(component.addOptions(CSL_LANGS), 'cslLanguage'),
-      );
-
-    new Setting(containerEl)
-      .setName('Render inline citations')
-      .setDesc(
-        'In reading view, replace Pandoc-style [@citekey] markers in the ' +
-        'note text with formatted in-text citations (e.g. "(Smith, 2020)"). ' +
-        'The source text is unchanged.',
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.renderInlineCitations)
-          .onChange(async (value) => {
-            this.plugin.settings.renderInlineCitations = value;
-            await this.plugin.saveSettings();
-          }),
       );
   }
 

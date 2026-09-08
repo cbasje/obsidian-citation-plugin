@@ -56,7 +56,6 @@ export default class CitationPlugin extends Plugin {
       'cslStyle',
       'customCslStylePath',
       'cslLanguage',
-      'renderInlineCitations',
     ];
     toLoad.forEach((setting) => {
       if (setting in loadedSettings) {
@@ -250,7 +249,6 @@ export default class CitationPlugin extends Plugin {
     // Replace [@citekey] markers in note text with formatted in-text
     // citations in reading view.
     this.registerMarkdownPostProcessor((el, _ctx) => {
-      if (!this.settings.renderInlineCitations) return;
       this.renderInlineCitationsInElement(el);
     });
 
