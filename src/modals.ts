@@ -11,7 +11,7 @@ import {
   type SearchMatchPart,
 } from 'obsidian';
 import CitationPlugin from './main';
-import type { EntryMetadata } from './types';
+import type { EntryMetadata, FileType } from './types';
 import { ID_TYPES, type IdType } from './fetcher';
 
 // Stub some methods we know are there..
@@ -339,6 +339,127 @@ export class AddReferenceModal extends Modal {
       );
       this.submitBtn.disabled = false;
       this.submitBtn.textContent = 'Fetch and add';
+    }
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+const IMPORT_FORMAT_OPTIONS: {
+  value: FileType;
+  label: string;
+  placeholder: string;
+}[] = [
+  {
+    value: 'bib',
+    label: 'BibLaTeX (.bib)',
+    placeholder:
+      '@article{doe2024,\n  author = {Doe, Jane},\n  title = {A study of something},\n  year = {2024},\n}',
+  },
+  {
+    value: 'json',
+    label: 'CSL-JSON (.json)',
+    placeholder:
+      '[\n  {\n    "id": "doe2024",\n    "type": "article-journal",\n    "title": "A study of something"\n  }\n]',
+  },
+  {
+    value: 'ris',
+    label: 'RIS (.ris)',
+    placeholder:
+      'TY  - JOUR\nAU  - Doe, Jane\nTI  - A study of something\nPY  - 2024\nER  - ',
+  },
+];
+
+export class ImportTextModal extends Modal {
+  private inputValue = '';
+  private importBtn: HTMLButtonElement | undefined;
+  private textAreaEl: HTMLTextAreaElement | undefined;
+  private format: FileType;
+
+  constructor(
+    app: App,
+    defaultFormat: FileType | undefined,
+    private onImport: (raw: string, format: FileType) => Promise<void>,
+  ) {
+    super(app);
+    this.format = defaultFormat ?? 'bib';
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h2', { text: 'Import references' });
+
+    new Setting(contentEl).setName('Format').addDropdown((dropdown) =>
+      dropdown
+        .addOptions(
+          Object.fromEntries(
+            IMPORT_FORMAT_OPTIONS.map((o) => [o.value, o.label]),
+          ) as Record<string, string>,
+        )
+        .setValue(this.format)
+        .onChange((value) => {
+          this.format = value as FileType;
+          this.updatePlaceholder();
+        }),
+    );
+
+    new Setting(contentEl)
+      .setName('Paste data')
+      .setDesc(
+        'Import one or more entries into this library. Entries are converted to the library format on save.',
+      )
+      .addTextArea((text) => {
+        text.inputEl.addClass('citation-import-text-input');
+        text.inputEl.rows = 12;
+        text.onChange((value) => {
+          this.inputValue = value;
+          this.updateImportState();
+        });
+        this.textAreaEl = text.inputEl;
+        this.updatePlaceholder();
+      });
+
+    new Setting(contentEl).addButton((btn) => {
+      btn.setButtonText('Import').setClass('mod-cta');
+      this.importBtn = btn.buttonEl;
+      btn.onClick(() => this.import());
+      this.updateImportState();
+    });
+  }
+
+  private updatePlaceholder() {
+    if (!this.textAreaEl) return;
+    const config = IMPORT_FORMAT_OPTIONS.find((o) => o.value === this.format);
+    this.textAreaEl.placeholder = config?.placeholder ?? '';
+  }
+
+  private updateImportState() {
+    if (!this.importBtn) return;
+    this.importBtn.disabled = this.inputValue.trim().length === 0;
+  }
+
+  private async import() {
+    if (!this.importBtn) return;
+    const raw = this.inputValue.trim();
+    if (!raw) return;
+
+    this.importBtn.disabled = true;
+    this.importBtn.textContent = 'Importing…';
+
+    try {
+      await this.onImport(raw, this.format);
+      this.close();
+    } catch (e) {
+      console.error('Citation manager: import failed', e);
+      new Notice(
+        e instanceof Error ? e.message : 'Failed to import references.',
+        5000,
+      );
+      this.importBtn.disabled = false;
+      this.importBtn.textContent = 'Import';
     }
   }
 

@@ -1,10 +1,12 @@
 <script lang="ts">
   import { getMarkdownCitationForCitekey } from '../main';
-  import type { EntryMetadata } from '../types';
-  import type { App } from 'obsidian';
+  import { fileTypes, type EntryMetadata, type FileType } from '../types';
+  import { Notice, type App } from 'obsidian';
   import type { CitationDatabase } from '../database';
 
   import IconClipboardCopy from '@lucide/svelte/icons/clipboard-copy';
+  import IconClipboardPaste from '@lucide/svelte/icons/clipboard-paste';
+  import IconFileUp from '@lucide/svelte/icons/file-up';
   import IconPlus from '@lucide/svelte/icons/plus';
   import IconTrash from '@lucide/svelte/icons/trash';
 
@@ -13,6 +15,8 @@
     db,
     getNotePath,
     openAddModal,
+    openImportTextModal,
+    importRawEntries,
     onChange,
     onRemove,
   }: {
@@ -20,12 +24,38 @@
     db: CitationDatabase;
     getNotePath: (id: string) => string;
     openAddModal: () => void;
+    openImportTextModal: () => void;
+    importRawEntries: (raw: string, format?: FileType) => Promise<void>;
     onChange: () => void;
     onRemove?: (id: string) => void;
   } = $props();
 
   let containerEl = $state<HTMLDivElement>();
   let entries = $derived(db.entriesRich);
+  let fileInputEl = $state<HTMLInputElement>();
+
+  // Only accept files that parse in this database's own format.
+  const importAccept = $derived(db.type ? `.${db.type}` : '.bib,.json,.ris');
+
+  async function handleImportFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    // Reset so picking the same file again fires another change event.
+    input.value = '';
+    if (!file) return;
+
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const format = fileTypes.find((t) => t === extension);
+      await importRawEntries(await file.text(), format);
+    } catch (e) {
+      console.error('Citation manager: file import failed', e);
+      new Notice(
+        e instanceof Error ? e.message : 'Failed to import references.',
+        5000,
+      );
+    }
+  }
 
   function handleRemove(id: string) {
     entries.delete(id);
@@ -76,6 +106,22 @@
     <button class="text-icon-button" onclick={() => openAddModal()}>
       <IconPlus class="svg-icon" />
       <span class="text-button-label">Add reference</span>
+    </button>
+    <button
+      title="Import from text"
+      aria-label="Import from text"
+      class="clickable-icon"
+      onclick={() => openImportTextModal()}
+    >
+      <IconClipboardPaste class="svg-icon" />
+    </button>
+    <button
+      title="Import from file"
+      aria-label="Import from file"
+      class="clickable-icon"
+      onclick={() => fileInputEl?.click()}
+    >
+      <IconFileUp class="svg-icon" />
     </button>
     <span class="count">{db.entries.size} entries</span>
   </div>
@@ -157,6 +203,14 @@
       </tbody>
     </table>
   </div>
+
+  <input
+    bind:this={fileInputEl}
+    type="file"
+    accept={importAccept}
+    class="import-file-input"
+    onchange={handleImportFile}
+  />
 </div>
 
 <style>
@@ -180,6 +234,23 @@
     color: var(--text-muted);
     font-size: var(--font-ui-small);
     margin-left: auto;
+  }
+
+  /* Hidden file input: clicked programmatically by the import toolbar
+     button. Kept out of the toolbar and visually hidden (not merely
+     display:none) so no stray rule can ever make it visible in-flow. */
+  .import-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    display: none;
   }
 
   .table-wrap {

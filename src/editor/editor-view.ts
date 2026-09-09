@@ -1,16 +1,21 @@
-import { TextFileView, TFile, WorkspaceLeaf, type IconName } from 'obsidian';
+import {
+  Notice,
+  TextFileView,
+  TFile,
+  WorkspaceLeaf,
+  type IconName,
+} from 'obsidian';
 import CitationPlugin from '../main';
 import {
-  type EntryData,
   type EntryDataBibLaTeX,
-  type EntryDataCSL,
+  type FileType,
   CIT_VIEW_TYPE,
   CIT_ICON,
-  type EntryMetadata,
   getEntryMetadata,
 } from '../types';
 import { fetchEntryById, generateCiteKey, type IdType } from '../fetcher';
-import { AddReferenceModal } from '../modals';
+import { deserializeEntries } from '../database/serializer';
+import { AddReferenceModal, ImportTextModal } from '../modals';
 import Editor from './Editor.svelte';
 import { mount, unmount } from 'svelte';
 import type { CitationDatabase } from '../database';
@@ -82,6 +87,13 @@ export class EditorView extends TextFileView {
             this.fetchAndAddEntry(idType, id),
           ).open();
         },
+        openImportTextModal: () => {
+          new ImportTextModal(this.app, this.db.type, (raw, format) =>
+            this.importRawEntries(raw, format),
+          ).open();
+        },
+        importRawEntries: (raw: string, format?: FileType) =>
+          this.importRawEntries(raw, format),
         onChange: () => {
           this.requestSave();
         },
@@ -128,6 +140,54 @@ export class EditorView extends TextFileView {
       console.error('Citation manager: failed to serialize entries', e);
       return this.value;
     }
+  }
+
+  /**
+   * Parse raw text in the given format (BibLaTeX, CSL-JSON, or RIS,
+   * defaulting to the database's own format) and merge the entries into the
+   * database. Entries keep the citekey assigned by their source when it is
+   * free; on collision a fresh unique key is minted (and the raw BibLaTeX
+   * label is updated along with it, so the library still round-trips when
+   * saved back to .bib).
+   */
+  private async importRawEntries(raw: string, format?: FileType) {
+    if (!this.db || !this.editor) return;
+
+    const importType = format ?? this.db.type;
+    if (!importType) {
+      new Notice('Cannot import: unsupported library file type.');
+      return;
+    }
+
+    const parsed = deserializeEntries(raw, importType);
+    if (parsed.length === 0) {
+      new Notice('No entries found in the provided data.');
+      return;
+    }
+
+    for (const entry of parsed) {
+      let id = entry.id;
+      if (!id || this.db.entries.has(id)) {
+        id = generateCiteKey(entry, this.db.ids);
+        entry.id = id;
+        const rawLabel = (entry as EntryDataBibLaTeX)._biblatex;
+        if (rawLabel) rawLabel.label = id;
+      }
+      this.db.add(
+        getEntryMetadata(
+          id,
+          entry,
+          importType,
+          this.db.dir,
+          this.db.vaultPath,
+        ),
+      );
+    }
+
+    this.requestSave();
+    new Notice(
+      `Imported ${parsed.length} ${parsed.length === 1 ? 'entry' : 'entries'}.`,
+    );
   }
 
   private async fetchAndAddEntry(idType: IdType, id: string) {
