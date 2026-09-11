@@ -140,7 +140,7 @@ const renderAdvancedTemplate = async (
   citekey: string,
 ) => {
   const template =
-    '{% for author in entry.author %}[[{{ author.family }}, {{ author.given }}]]{% if not loop.last %}, {% endif %}{% endfor %}';
+    '{% for a in author %}[[{{ a.family }}, {{ a.given }}]]{% if not loop.last %}, {% endif %}{% endfor %}';
   return renderTemplate(template, db.getTemplateVariablesForCitekey(citekey));
 };
 
@@ -306,7 +306,7 @@ describe('ris library', () => {
     ]);
   });
 
-  test('vault-local file links become wikilinks', () => {
+  test('vault-local file links become vault-relative paths', () => {
     const entry = db.retrieve('alexandrescu2006factoredneural');
     const meta = getEntryMetadata(
       'alexandrescu2006factoredneural',
@@ -315,7 +315,25 @@ describe('ris library', () => {
       undefined,
       '/Users/sebastiaan/Documents',
     );
-    expect(meta.files).toEqual(['[[papers/alexandrescu2006.pdf]]']);
+    expect(meta.files).toEqual(['papers/alexandrescu2006.pdf']);
+  });
+
+  test('file_link filter formats paths and URLs', async () => {
+    const vars = {
+      files: [
+        'papers/a.pdf',
+        'https://example.org/b.pdf',
+        'file:///Users/outside/c.pdf',
+      ],
+    };
+    expect(await renderTemplate('{{ files | file_link | list }}', vars)).toBe(
+      '- "[[papers/a.pdf]]"\n' +
+      '- "[b.pdf](https://example.org/b.pdf)"\n' +
+      '- "[c.pdf](file:///Users/outside/c.pdf)"',
+    );
+    expect(await renderTemplate('{{ "papers/a.pdf" | file_link }}', vars)).toBe(
+      '"[[papers/a.pdf]]"',
+    );
   });
 
   test('non-RIS content in a .ris file fails loudly', async () => {

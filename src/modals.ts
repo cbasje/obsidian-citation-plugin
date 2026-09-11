@@ -214,8 +214,12 @@ export class OpenNoteModal extends SearchModal {
         const firstFile = files.at(0);
         if (!firstFile) {
           new Notice('This reference has no associated PDF files.');
-        } else if (firstFile.startsWith('[[') && firstFile.endsWith(']]')) {
-          const path = firstFile.slice(2, -2).split('/');
+        } else if (/^[a-z]+:\/\//i.test(firstFile)) {
+          // External URL (https, file, zotero): open outside Obsidian.
+          open(firstFile);
+        } else {
+          // Vault-relative path: open inside Obsidian.
+          const path = firstFile.split('/');
           const fileName = path.pop();
           if (!fileName) return;
           this.app.workspace.openLinkText(
@@ -223,8 +227,6 @@ export class OpenNoteModal extends SearchModal {
             path?.join('/') ?? '/',
             true,
           );
-        } else if (firstFile.endsWith('.pdf')) {
-          open(`file://${firstFile}`);
         }
       } else {
         open(item.zoteroSelectURI);
@@ -352,25 +354,25 @@ const IMPORT_FORMAT_OPTIONS: {
   label: string;
   placeholder: string;
 }[] = [
-  {
-    value: 'bib',
-    label: 'BibLaTeX (.bib)',
-    placeholder:
-      '@article{doe2024,\n  author = {Doe, Jane},\n  title = {A study of something},\n  year = {2024},\n}',
-  },
-  {
-    value: 'json',
-    label: 'CSL-JSON (.json)',
-    placeholder:
-      '[\n  {\n    "id": "doe2024",\n    "type": "article-journal",\n    "title": "A study of something"\n  }\n]',
-  },
-  {
-    value: 'ris',
-    label: 'RIS (.ris)',
-    placeholder:
-      'TY  - JOUR\nAU  - Doe, Jane\nTI  - A study of something\nPY  - 2024\nER  - ',
-  },
-];
+    {
+      value: 'bib',
+      label: 'BibLaTeX (.bib)',
+      placeholder:
+        '@article{doe2024,\n  author = {Doe, Jane},\n  title = {A study of something},\n  year = {2024},\n}',
+    },
+    {
+      value: 'json',
+      label: 'CSL-JSON (.json)',
+      placeholder:
+        '[\n  {\n    "id": "doe2024",\n    "type": "article-journal",\n    "title": "A study of something"\n  }\n]',
+    },
+    {
+      value: 'ris',
+      label: 'RIS (.ris)',
+      placeholder:
+        'TY  - JOUR\nAU  - Doe, Jane\nTI  - A study of something\nPY  - 2024\nER  - ',
+    },
+  ];
 
 export class ImportTextModal extends Modal {
   private inputValue = '';

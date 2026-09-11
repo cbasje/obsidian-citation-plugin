@@ -1,5 +1,5 @@
-import type { TFile } from "obsidian";
-import type { FileType } from "../types";
+import type { TFile } from 'obsidian';
+import type { FileType } from '../types';
 
 class MockFile {
   parent: undefined;

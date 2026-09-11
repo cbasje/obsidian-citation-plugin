@@ -75,7 +75,7 @@
     { key: 'citekey', label: 'Citekey' },
     { key: 'type', label: 'Type' },
     { key: 'year', label: 'Year' },
-    { key: 'authorString', label: 'Authors' },
+    { key: 'authors', label: 'Authors' },
     { key: 'title', label: 'Title' },
     { key: 'DOI', label: 'DOI' },
     { key: 'URL', label: 'URL' },
@@ -220,7 +220,10 @@
                     {#if Array.isArray(value) && value.length > 0}
                       <ul>
                         {#each value as file}
-                          <li use:linkHover={file.slice(2, -2)}>{file}</li>
+                          {@const isVaultPath = !file.includes('://')}
+                          <li use:linkHover={isVaultPath ? file : ''}>
+                            {file}
+                          </li>
                         {/each}
                       </ul>
                     {/if}
@@ -228,6 +231,14 @@
                     <a href="https://doi.org/{value}">{value}</a>
                   {:else if col.key === 'URL' && value}
                     <a href={value}>{value}</a>
+                  {:else if Array.isArray(value) && value.length > 0}
+                    <ul>
+                      {#each value as v}
+                        <li>
+                          {v}
+                        </li>
+                      {/each}
+                    </ul>
                   {:else if value}
                     {value}
                   {/if}

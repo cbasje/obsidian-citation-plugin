@@ -12,15 +12,14 @@ export const CIT_ICON = 'quote';
 export const TEMPLATE_VARIABLES = {
   citekey: 'Unique citekey',
   abstract: '',
-  authorString: 'Comma-separated list of author names',
+  authors: 'List of author names',
   containerTitle:
     'Title of the container holding the reference (e.g. book title for a book chapter, or the journal title for a journal article)',
   DOI: '',
   eprint: '',
   eprinttype: '',
   eventPlace: 'Location of event',
-  files:
-    'List of associated file paths (e.g. PDFs) from the reference database',
+  files: 'List of associated file paths (e.g. PDFs)',
   note: '',
   page: 'Page or page range',
   publisher: '',
@@ -29,6 +28,7 @@ export const TEMPLATE_VARIABLES = {
   titleShort: '',
   URL: '',
   year: 'Publication year',
+  date: 'Publication date',
   zoteroSelectURI: 'URI to open the reference in Zotero',
 };
 
@@ -42,6 +42,7 @@ export interface EntryMetadata {
   type: string;
   abstract?: string;
   author?: Author[];
+  authors?: string[];
   authorString?: string;
   containerTitle?: string;
   containerTitleShort?: string;
@@ -56,6 +57,7 @@ export interface EntryMetadata {
   publisherPlace?: string;
   eprint?: string;
   eprinttype?: string;
+  date: string;
   year?: string;
   note?: string;
   zoteroSelectURI: string;
@@ -127,8 +129,9 @@ function getRisMetadata(
 
 /**
  * Convert a raw RIS file link (`L1`/`L2`/`L3`) into a usable link: a
- * `file://` path inside the vault becomes a vault-relative wikilink,
- * anything else (URL or external path) is kept as-is.
+ * `file://` path inside the vault becomes a vault-relative path,
+ * anything else (URL or external path) is kept as-is. Wikilink/Markdown
+ * formatting is left to the `file_link` template filter.
  */
 function parseRisFileLink(
   link: string | undefined,
@@ -139,23 +142,23 @@ function parseRisFileLink(
 
   const FILE_URL_PREFIX = 'file://';
   if (vaultPath && s.startsWith(FILE_URL_PREFIX + vaultPath + '/')) {
-    const relative = s.slice(FILE_URL_PREFIX.length + vaultPath.length + 1);
-    return `[[${relative}]]`;
+    return s.slice(FILE_URL_PREFIX.length + vaultPath.length + 1);
   }
   return s;
 }
 
 function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
-  const authorString = data.author
+  const authors = data.author
     ? data.author
-        .map((a) => {
-          if (a.literal) return a.literal;
-          return [a.given, a.family].filter(Boolean).join(' ');
-        })
-        .join(', ')
+      .map((a) => {
+        if (a.literal) return a.literal;
+        return [a.given, a.family].filter(Boolean).join(' ');
+      })
     : undefined;
 
+  // CSL issued date-parts
   const year = data.issued?.['date-parts']?.[0]?.[0]?.toString();
+  const date = data.issued?.['date-parts']?.[0]?.join('-');
 
   return {
     citekey,
@@ -163,7 +166,8 @@ function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
     type: data.type,
     abstract: data.abstract,
     author: data.author,
-    authorString,
+    authors,
+    authorString: authors?.join(', '),
     containerTitle: data['container-title'],
     containerTitleShort: data['container-title-short'],
     DOI: data.DOI,
@@ -178,6 +182,7 @@ function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
     eprint: undefined,
     eprinttype: undefined,
     year,
+    date,
     note: undefined,
     zoteroSelectURI: `zotero://select/items/@${data.id}`,
   };
@@ -198,13 +203,12 @@ function getBibLaTeXMetadata(
   const raw = data._biblatex?.properties || {};
 
   // Author string from CSL authors (parsed into {given, family} by Citation.js)
-  const authorString = data.author
+  const authors = data.author
     ? data.author
-        .map((a) => {
-          if (a.literal) return a.literal;
-          return [a.given, a.family].filter(Boolean).join(' ');
-        })
-        .join(', ')
+      .map((a) => {
+        if (a.literal) return a.literal;
+        return [a.given, a.family].filter(Boolean).join(' ');
+      })
     : undefined;
 
   // Container title: prefer CSL, fall back to raw BibLaTeX fields, then
@@ -223,8 +227,9 @@ function getBibLaTeXMetadata(
     resolvedContainerTitle = `${prefix}${raw.eprint}${suffix}`;
   }
 
-  // Year from CSL issued date-parts
+  // CSL issued date-parts
   const year = data.issued?.['date-parts']?.[0]?.[0]?.toString();
+  const date = data.issued?.['date-parts']?.[0]?.join('-');
 
   // Note: use raw BibLaTeX (LaTeX formatting preserved), not CSL (HTML).
   // Format Zotero select links as Markdown.
@@ -247,7 +252,8 @@ function getBibLaTeXMetadata(
     type: data.type,
     abstract: data.abstract,
     author: data.author,
-    authorString,
+    authors,
+    authorString: authors?.join(', '),
     containerTitle: resolvedContainerTitle,
     containerTitleShort:
       (data['container-title-short'] as string) || raw.shortjournal,
@@ -263,14 +269,17 @@ function getBibLaTeXMetadata(
     eprint: raw.eprint,
     eprinttype: raw.eprinttype,
     year,
+    date,
     note,
     zoteroSelectURI: `zotero://select/items/@${data.id}`,
   };
 }
 
 /**
- * Parse a single file entry from a BibLaTeX `file` field and return the best
- * usable link (a URL or a `file://` path).
+ * Parse a single file entry from a BibLaTeX `file` field and return the
+ * best usable link: a vault-relative path (when inside the vault), a
+ * `file://` path, or a URL. Wikilink/Markdown formatting is left to the
+ * `file_link` template filter.
  *
  * Better BibTeX encodes file attachments as colon-separated fields with
  * `\:` escaping literal colons:
@@ -322,11 +331,10 @@ function parseFileEntry(
   // directory separator — a bare filename like "paper.pdf" is not usable as
   // a local link, so fall through to the URL.
   if (pathPart) {
-    // If the path is inside the Obsidian vault, link to it as a local
-    // (vault-relative) note so Obsidian resolves it natively.
+    // If the path is inside the Obsidian vault, return it as a
+    // vault-relative path so Obsidian resolves it natively.
     if (vaultPath && pathPart.startsWith(vaultPath + '/')) {
-      const relative = pathPart.slice(vaultPath.length + 1);
-      return `[[${relative}]]`;
+      return pathPart.slice(vaultPath.length + 1);
     }
     const isAbsolute =
       pathPart.startsWith('/') || /^[A-Za-z]:[\\/]/.test(pathPart);
@@ -335,7 +343,7 @@ function parseFileEntry(
     }
     // File is local
     if (pathPart.includes('/')) {
-      return `[[${pathPart}]]`;
+      return pathPart;
     }
   }
 

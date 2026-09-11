@@ -20,13 +20,13 @@ export class CitationsPluginSettings {
   literatureNoteTitleTemplate = '@{{ citekey }}';
   literatureNoteFolder = 'Reading notes';
   literatureNoteContentTemplate = `---
-title: {{ title }}
-authors: {{ authorString }}
-year: {{ year }}
+authors:
+{{ authors | list | indent:2 }}
+date: {{ date }}
 {% if files %}files:
-{{ files | list | indent:2 }}
+{{ files | file_link | list | indent:2 }}
 {% endif %}---
-`;
+{{ title | h1 }}`;
 
   cslStyle: CSL_STYLE_ID | 'custom' = 'apa';
   customCslStylePath = '';

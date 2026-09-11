@@ -35,9 +35,10 @@ You can set up your own template for both the title and content of literature no
 ```
 * {{citekey}}
 * {{abstract}}
-* {{authorString}}
+* {{authors}}
 * {{containerTitle}}
 * {{DOI}}
+* {{files}}
 * {{eprint}}
 * {{eprinttype}}
 * {{eventPlace}}
@@ -48,6 +49,7 @@ You can set up your own template for both the title and content of literature no
 * {{titleShort}}
 * {{URL}}
 * {{year}}
+* {{date}}
 * {{zoteroSelectURI}}
 ```
 For example, your literature note title template can simply be `@{{citekey}}` and the content template can look like:

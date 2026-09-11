@@ -226,12 +226,9 @@ export class CitationDatabase {
 
   /**
    * For the given citekey, return a flat object of template variables.
-   * All metadata fields are available both at the top level (`{{title}}`)
-   * and via `{{entry.title}}`.
    */
   getTemplateVariablesForCitekey(citekey: string): Record<string, any> {
-    const entry = this.entriesRich.get(citekey);
-    return entry ? { entry, ...entry } : {};
+    return this.entriesRich.get(citekey);
   }
 
   async getTitleForCitekey(citekey: string): Promise<string> {
