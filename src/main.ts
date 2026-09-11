@@ -8,11 +8,8 @@ import {
   TFolder,
   TAbstractFile,
 } from 'obsidian';
-import {
-  compile as compileTemplate,
-  type TemplateDelegate as Template,
-} from 'handlebars';
 import CitationEvents from './events';
+import { renderTemplate } from './templates';
 import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
 import { fileTypes, type IIndexable, CIT_VIEW_TYPE, CIT_ICON } from './types';
@@ -33,11 +30,6 @@ export default class CitationPlugin extends Plugin {
   events = new CitationEvents();
 
   registry!: DatabaseRegistry;
-
-  // Template compilation options
-  private templateSettings = {
-    noEscape: true,
-  };
 
   get editor(): Editor | null {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -121,7 +113,7 @@ export default class CitationPlugin extends Plugin {
       this.loadDatabase();
 
       this.registerEvent(
-        this.app.vault.on('create', (file) => {
+        this.app.vault.on('create', async (file) => {
           // Track new candidate database files in the registry.
           if (DatabaseRegistry.isPotentialDatabase(file))
             this.registry.add(file);
@@ -132,18 +124,22 @@ export default class CitationPlugin extends Plugin {
             if (!dbFile) return;
 
             const db = this.registry.peek(dbFile.path);
-            if (db && db.paths.includes(file.path)) {
-              const citekey = file.name.slice(1, -3); // @{{citekey}}.md
-              const entry = db.entries.has(citekey);
-              if (!entry) return;
+            if (!db) return;
 
-              // Add initial content
-              this.app.vault.modify(
-                file,
-                db.getInitialContentForCitekey(citekey),
-              );
+            let citekey = db.getCitekeyForNotePath(file.path);
+            if (!citekey) {
+              // The note path cache may still be warming (Knap renders
+              // asynchronously): refresh it and retry once.
+              await db.refreshNotePaths();
+              citekey = db.getCitekeyForNotePath(file.path);
             }
-            return;
+            if (!citekey) return;
+
+            // Add initial content
+            this.app.vault.modify(
+              file,
+              await db.getInitialContentForCitekey(citekey),
+            );
           }
         }),
       );
@@ -298,17 +294,18 @@ export default class CitationPlugin extends Plugin {
     return parent.children.find((f) => DatabaseRegistry.isPotentialDatabase(f));
   }
 
-  get literatureNoteTitleTemplate(): Template {
-    return compileTemplate(
-      this.settings.literatureNoteTitleTemplate,
-      this.templateSettings,
-    );
+  async renderLiteratureNoteTitle(
+    variables: Record<string, any>,
+  ): Promise<string> {
+    return renderTemplate(this.settings.literatureNoteTitleTemplate, variables);
   }
 
-  get literatureNoteContentTemplate(): Template {
-    return compileTemplate(
+  async renderLiteratureNoteContent(
+    variables: Record<string, any>,
+  ): Promise<string> {
+    return renderTemplate(
       this.settings.literatureNoteContentTemplate,
-      this.templateSettings,
+      variables,
     );
   }
 

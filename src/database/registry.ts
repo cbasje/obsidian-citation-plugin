@@ -90,6 +90,16 @@ export class DatabaseRegistry {
   }
 
   /**
+   * Re-render cached literature note paths on all loaded instances
+   * (e.g. after the note title template setting changes).
+   */
+  refreshNotePaths(force = false): void {
+    for (const db of this.dbs.values()) {
+      db.refreshNotePaths(force);
+    }
+  }
+
+  /**
    * Peek at the instance for `path` without changing the refcount.
    */
   peek(path: string): CitationDatabase | undefined {

@@ -80,7 +80,10 @@ export class EditorView extends TextFileView {
         app: this.app,
         db: this.db,
         getNotePath: (citekey: string) => {
-          return this.db.getPathForCitekey(citekey);
+          // Note paths are rendered asynchronously (Knap) and cached on
+          // the database; read from the reactive cache so hover links
+          // update once rendering completes.
+          return this.db.notePaths.get(citekey) ?? '';
         },
         openAddModal: () => {
           new AddReferenceModal(this.app, (idType, id) =>
@@ -174,13 +177,7 @@ export class EditorView extends TextFileView {
         if (rawLabel) rawLabel.label = id;
       }
       this.db.add(
-        getEntryMetadata(
-          id,
-          entry,
-          importType,
-          this.db.dir,
-          this.db.vaultPath,
-        ),
+        getEntryMetadata(id, entry, importType, this.db.dir, this.db.vaultPath),
       );
     }
 

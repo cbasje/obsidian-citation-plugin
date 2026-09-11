@@ -117,21 +117,26 @@
   );
 
   const linkHover = (node: HTMLSpanElement, link: string) => {
-    if (!link) return;
+    let currentLink = link;
 
     const cb = (ev: MouseEvent) => {
+      if (!currentLink) return;
+
       app.workspace.trigger('hover-link', {
         event: ev,
         source: 'bases',
         hoverParent: containerEl,
         targetEl: node,
-        linktext: link,
+        linktext: currentLink,
       });
     };
 
     node.addEventListener('mouseenter', cb);
 
     return {
+      update: (newLink: string) => {
+        currentLink = newLink;
+      },
       destroy: () => node.removeEventListener('mouseenter', cb),
     };
   };

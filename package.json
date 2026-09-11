@@ -56,7 +56,7 @@
     "@lucide/svelte": "^1.35.0",
     "citeproc": "^2.4.63",
     "defuddle": "^0.19.3",
-    "handlebars": "^4.7.9",
+    "knap": "^0.4.1",
     "temporal-polyfill": "^1.0.4"
   },
   "lint-staged": {

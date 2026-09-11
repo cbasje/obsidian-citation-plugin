@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { compile as compileTemplate } from 'handlebars';
+import { renderTemplate } from '../templates';
 import { CitationDatabase } from '../database';
 import { deserializeEntries } from '../database/serializer';
 import { getEntryMetadata } from '../types';
@@ -135,10 +135,13 @@ function matchLibraryRender(
   expect(actual).toMatchObject(expected);
 }
 
-const renderAdvancedTemplate = (db: CitationDatabase, citekey: string) => {
+const renderAdvancedTemplate = async (
+  db: CitationDatabase,
+  citekey: string,
+) => {
   const template =
-    '{{#each entry.author}}[[{{this.family}}, {{this.given}}]]{{#unless @last}}, {{/unless}}{{/each}}';
-  return compileTemplate(template)(db.getTemplateVariablesForCitekey(citekey));
+    '{% for author in entry.author %}[[{{ author.family }}, {{ author.given }}]]{% if not loop.last %}, {% endif %}{% endfor %}';
+  return renderTemplate(template, db.getTemplateVariablesForCitekey(citekey));
 };
 
 describe('biblatex library', () => {
@@ -168,9 +171,9 @@ describe('biblatex library', () => {
     matchLibraryRender(templateVariables, expectedRender);
   });
 
-  test('advanced template render', () => {
-    const render = renderAdvancedTemplate(db, 'aitchison2017you');
-    expect(render).toBe('[[Aitchison, Laurence]], [[Lengyel, Máté]]');
+  test('advanced template render', async () => {
+    const render = await renderAdvancedTemplate(db, 'aitchison2017you');
+    expect(render).toBe('[[Aitchison, Laurence]], \n[[Lengyel, Máté]]');
   });
 });
 
@@ -224,9 +227,9 @@ describe('csl library', () => {
     matchLibraryRender(templateVariables, expectedRender, BIBLATEX_FIELDS_ONLY);
   });
 
-  test('advanced template render', () => {
-    const render = renderAdvancedTemplate(db, 'aitchison2017you');
-    expect(render).toBe('[[Aitchison, Laurence]], [[Lengyel, Máté]]');
+  test('advanced template render', async () => {
+    const render = await renderAdvancedTemplate(db, 'aitchison2017you');
+    expect(render).toBe('[[Aitchison, Laurence]], \n[[Lengyel, Máté]]');
   });
 });
 

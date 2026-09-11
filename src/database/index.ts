@@ -21,6 +21,17 @@ export class CitationDatabase {
   readonly entries = new SvelteMap<string, EntryDataCSL>();
   readonly entriesRich = new SvelteMap<string, EntryMetadata>();
 
+  /**
+   * Literature note paths per citekey, rendered from the title template.
+   * Knap rendering is asynchronous, so paths are cached here after every
+   * load/add/delete and exposed as a SvelteMap so UI consumers (e.g.
+   * editor hover links) update reactively once rendering completes.
+   */
+  readonly notePaths = new SvelteMap<string, string>();
+
+  /** Serialized in-flight note path refresh chain. */
+  private notePathsRefresh: Promise<void> = Promise.resolve();
+
   public _file: TFile | undefined;
   public path: string | undefined;
   public vaultPath: string | undefined;
@@ -100,6 +111,9 @@ export class CitationDatabase {
       console.debug(
         `Citation manager: successfully loaded database with ${this.entries.size} entries.`,
       );
+
+      // Warm the note path cache (async; failures are logged inside).
+      this.refreshNotePaths();
     } catch (e) {
       console.error(e);
       throw e;
@@ -125,10 +139,48 @@ export class CitationDatabase {
     return Array.from(this.entries.keys());
   }
 
-  get paths() {
-    return Array.from(this.entries.keys()).map((id) =>
-      this.getPathForCitekey(id),
+  /**
+   * Queue a re-render of cached literature note paths. Only citekeys
+   * without a cached path are rendered; pass `force` to re-render all
+   * of them (e.g. after a title template settings change). Runs are
+   * serialized so bursts of add/delete calls don't race; render
+   * failures are logged and leave the citekey uncached for retry.
+   */
+  refreshNotePaths(force = false): Promise<void> {
+    this.notePathsRefresh = this.notePathsRefresh.then(() =>
+      this.renderNotePaths(force),
     );
+    return this.notePathsRefresh;
+  }
+
+  private async renderNotePaths(force: boolean): Promise<void> {
+    if (!this.plugin) return;
+    if (force) this.notePaths.clear();
+
+    try {
+      for (const id of this.ids) {
+        if (this.notePaths.has(id)) continue;
+        this.notePaths.set(id, await this.getPathForCitekey(id));
+      }
+    } catch (e) {
+      console.error('Citation manager: failed to render note paths', e);
+    }
+
+    for (const id of Array.from(this.notePaths.keys())) {
+      if (!this.entries.has(id)) this.notePaths.delete(id);
+    }
+  }
+
+  /**
+   * Reverse lookup: the citekey whose literature note lives at `path`,
+   * or undefined when no cached note path matches. Depends on the
+   * asynchronously populated `notePaths` cache.
+   */
+  getCitekeyForNotePath(path: string): string | undefined {
+    for (const [citekey, notePath] of this.notePaths) {
+      if (notePath === path) return citekey;
+    }
+    return undefined;
   }
 
   retrieve(id: string): EntryDataCSL | undefined {
@@ -141,16 +193,19 @@ export class CitationDatabase {
   add(entry: EntryMetadata) {
     this.entries.set(entry.id, entry);
     this.entriesRich.set(entry.id, entry);
+    this.refreshNotePaths();
   }
 
   delete(id: string) {
     this.entries.delete(id);
     this.entriesRich.delete(id);
+    this.notePaths.delete(id);
   }
 
   clear() {
     this.entries.clear();
     this.entriesRich.clear();
+    this.notePaths.clear();
   }
 
   get type(): FileType | undefined {
@@ -179,15 +234,15 @@ export class CitationDatabase {
     return entry ? { entry, ...entry } : {};
   }
 
-  getTitleForCitekey(citekey: string): string {
-    const unsafeTitle = this.plugin.literatureNoteTitleTemplate(
+  async getTitleForCitekey(citekey: string): Promise<string> {
+    const unsafeTitle = await this.plugin.renderLiteratureNoteTitle(
       this.getTemplateVariablesForCitekey(citekey),
     );
     return unsafeTitle.replace(DISALLOWED_FILENAME_CHARACTERS_RE, '_');
   }
 
-  getPathForCitekey(citekey: string): string {
-    const title = this.getTitleForCitekey(citekey);
+  async getPathForCitekey(citekey: string): Promise<string> {
+    const title = await this.getTitleForCitekey(citekey);
     const notesFolder =
       this.plugin.settings.literatureNoteFolder || 'Reading notes';
     const notesSep = notesFolder && !notesFolder.endsWith('/') ? '/' : '';
@@ -200,8 +255,8 @@ export class CitationDatabase {
     );
   }
 
-  getInitialContentForCitekey(citekey: string): string {
-    return this.plugin.literatureNoteContentTemplate(
+  async getInitialContentForCitekey(citekey: string): Promise<string> {
+    return this.plugin.renderLiteratureNoteContent(
       this.getTemplateVariablesForCitekey(citekey),
     );
   }
@@ -211,7 +266,7 @@ export class CitationDatabase {
    * the given citekey. If no corresponding file is found, create one.
    */
   async getOrCreateLiteratureNoteFile(citekey: string): Promise<TFile> {
-    const notePath = this.getPathForCitekey(citekey);
+    const notePath = await this.getPathForCitekey(citekey);
 
     let file = this.plugin.app.vault.getAbstractFileByPath(notePath);
     if (file == null) {
@@ -225,7 +280,7 @@ export class CitationDatabase {
         try {
           file = await this.plugin.app.vault.create(
             notePath,
-            this.getInitialContentForCitekey(citekey),
+            await this.getInitialContentForCitekey(citekey),
           );
         } catch (exc) {
           new Notice(

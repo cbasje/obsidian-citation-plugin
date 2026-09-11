@@ -17,18 +17,15 @@ import {
 export class CitationsPluginSettings {
   public citationExportPath: string = '';
 
-  literatureNoteTitleTemplate = '@{{citekey}}';
+  literatureNoteTitleTemplate = '@{{ citekey }}';
   literatureNoteFolder = 'Reading notes';
   literatureNoteContentTemplate = `---
-title: {{title}}
-authors: {{authorString}}
-year: {{year}}
-{{#if files}}files:
-{{#each files}}
-  - "{{this}}"
-{{/each}}
-{{/if}}
----
+title: {{ title }}
+authors: {{ authorString }}
+year: {{ year }}
+{% if files %}files:
+{{ files | list | indent:2 }}
+{% endif %}---
 `;
 
   cslStyle: CSL_STYLE_ID | 'custom' = 'apa';
@@ -159,13 +156,15 @@ export class CitationSettingTab extends PluginSettingTab {
     );
     templateInstructionsEl.append(
       createEl('a', {
-        text: 'Handlebars',
-        href: 'https://handlebarsjs.com/guide/expressions.html',
+        text: 'Knap',
+        href: 'https://knap.md/',
       }),
     );
     templateInstructionsEl.append(
       createSpan({
-        text: ' syntax. You can make reference to the following variables:',
+        text:
+          ' syntax (also used by Obsidian Web Clipper and Importer). ' +
+          'You can make reference to the following variables:',
       }),
     );
 
@@ -211,11 +210,12 @@ export class CitationSettingTab extends PluginSettingTab {
         'If your citation database is under "vault/folder", and you set subfolder name to "Notes", the literature notes will be saved to "vault/folder/Notes".',
       );
 
-    new Setting(containerEl)
-      .setName('Title template')
-      .addText((input) =>
-        this.buildValueInput(input, 'literatureNoteTitleTemplate'),
-      );
+    new Setting(containerEl).setName('Title template').addText((input) =>
+      this.buildValueInput(input, 'literatureNoteTitleTemplate', () => {
+        // Note titles affect note paths: re-render cached paths.
+        this.plugin.registry.refreshNotePaths(true);
+      }),
+    );
 
     new Setting(containerEl)
       .setName('Content template')
