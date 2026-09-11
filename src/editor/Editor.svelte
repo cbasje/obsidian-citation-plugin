@@ -4,6 +4,8 @@
   import { Notice, type App } from 'obsidian';
   import type { CitationDatabase } from '../database';
 
+  import IconArrowDown from '@lucide/svelte/icons/arrow-down';
+  import IconArrowUp from '@lucide/svelte/icons/arrow-up';
   import IconClipboardCopy from '@lucide/svelte/icons/clipboard-copy';
   import IconClipboardPaste from '@lucide/svelte/icons/clipboard-paste';
   import IconFileUp from '@lucide/svelte/icons/file-up';
@@ -80,6 +82,40 @@
     { key: 'files', label: 'Files' },
   ];
 
+  let sortKey = $state<keyof EntryMetadata>('citekey');
+  let sortDir = $state<'asc' | 'desc'>('asc');
+
+  function toggleSort(key: keyof EntryMetadata) {
+    if (sortKey === key) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortKey = key;
+      sortDir = 'asc';
+    }
+  }
+
+  function compareEntries(a: EntryMetadata, b: EntryMetadata): number {
+    const va = a[sortKey];
+    const vb = b[sortKey];
+
+    let cmp: number;
+    if (Array.isArray(va) || Array.isArray(vb)) {
+      cmp =
+        (Array.isArray(va) ? va.length : 0) -
+        (Array.isArray(vb) ? vb.length : 0);
+    } else {
+      cmp = String(va ?? '').localeCompare(String(vb ?? ''), undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  }
+
+  const sortedEntries = $derived(
+    Array.from(entries.values()).sort(compareEntries),
+  );
+
   const linkHover = (node: HTMLSpanElement, link: string) => {
     if (!link) return;
 
@@ -131,13 +167,34 @@
       <thead>
         <tr>
           {#each columns as col (col.key)}
-            <th>{col.label}</th>
+            <th
+              aria-sort={sortKey === col.key
+                ? sortDir === 'asc'
+                  ? 'ascending'
+                  : 'descending'
+                : 'none'}
+            >
+              <button
+                class="sort-button{sortKey === col.key ? ' is-sorted' : ''}"
+                onclick={() => toggleSort(col.key)}
+                title={`Sort by ${col.label.toLowerCase()}`}
+              >
+                {col.label}
+                {#if sortKey === col.key}
+                  {#if sortDir === 'asc'}
+                    <IconArrowUp class="svg-icon" />
+                  {:else}
+                    <IconArrowDown class="svg-icon" />
+                  {/if}
+                {/if}
+              </button>
+            </th>
           {/each}
           <th class="actions-col"></th>
         </tr>
       </thead>
       <tbody>
-        {#each Array.from(entries.values()) as entry (entry.id)}
+        {#each sortedEntries as entry (entry.id)}
           <tr>
             {#each columns as col (col.key)}
               {@const value = entry[col.key]}
@@ -275,11 +332,37 @@
   th {
     text-align: left;
     white-space: nowrap;
-    padding: var(--size-4-1) var(--size-4-2);
+    padding: 0;
     font-size: var(--font-ui-small);
     font-weight: var(--font-medium);
     color: var(--text-muted);
     border-bottom: 1px solid var(--background-modifier-border);
+  }
+
+  .sort-button {
+    --icon-size: 1em;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--size-4-1);
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--size-4-1) var(--size-4-2);
+    font: inherit;
+    font-weight: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    border-radius: var(--radius-s);
+    cursor: pointer;
+  }
+
+  .sort-button:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
+  }
+
+  .sort-button.is-sorted {
+    color: var(--text-normal);
   }
 
   tbody tr:hover {
