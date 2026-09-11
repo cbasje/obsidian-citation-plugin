@@ -80,8 +80,8 @@
     { key: 'files', label: 'Files' },
   ];
 
-  const noteHover = (node: HTMLSpanElement, citekey: string) => {
-    if (!citekey) return;
+  const linkHover = (node: HTMLSpanElement, link: string) => {
+    if (!link) return;
 
     const cb = (ev: MouseEvent) => {
       app.workspace.trigger('hover-link', {
@@ -89,7 +89,7 @@
         source: 'bases',
         hoverParent: containerEl,
         targetEl: node,
-        linktext: getNotePath(citekey),
+        linktext: link,
       });
     };
 
@@ -144,8 +144,8 @@
               <td>
                 <div>
                   {#if col.key === 'citekey'}
-                    {@const citekey = value ?? entry.id}
-                    <span use:noteHover={citekey}>{citekey}</span>
+                    {@const citekey = (value as string | undefined) ?? entry.id}
+                    <span use:linkHover={getNotePath(citekey)}>{citekey}</span>
                     <button
                       title="Copy citation"
                       aria-label="Copy citation"
@@ -158,7 +158,7 @@
                     {#if Array.isArray(value) && value.length > 0}
                       <ul>
                         {#each value as file}
-                          <li>{file}</li>
+                          <li use:linkHover={file.slice(2, -2)}>{file}</li>
                         {/each}
                       </ul>
                     {/if}
