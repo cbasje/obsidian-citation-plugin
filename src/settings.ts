@@ -31,6 +31,7 @@ date: {{ date }}
   cslStyle: CSL_STYLE_ID | 'custom' = 'apa';
   customCslStylePath = '';
   cslLanguage: CSL_LANG | string = 'en-US';
+  syncNotesToDatabase = false;
 }
 
 export class CitationSettingTab extends PluginSettingTab {
@@ -221,6 +222,22 @@ export class CitationSettingTab extends PluginSettingTab {
       .setName('Content template')
       .addTextArea((input) =>
         this.buildValueInput(input, 'literatureNoteContentTemplate'),
+      );
+
+    new Setting(containerEl)
+      .setName('Sync notes to database')
+      .setDesc(
+        'Write changes made to literature note frontmatter back to the ' +
+        'citation database, so the database stays in sync with edits made ' +
+        'in the notes. Disable this to keep the database read-only.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.syncNotesToDatabase)
+          .onChange(async (value) => {
+            this.plugin.settings.syncNotesToDatabase = value;
+            await this.plugin.saveSettings();
+          }),
       );
 
     containerEl.createEl('h3', { text: 'References (CSL)' });

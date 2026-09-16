@@ -48,6 +48,7 @@ export default class CitationPlugin extends Plugin {
       'cslStyle',
       'customCslStylePath',
       'cslLanguage',
+      'syncNotesToDatabase',
     ];
     toLoad.forEach((setting) => {
       if (setting in loadedSettings) {
@@ -154,6 +155,41 @@ export default class CitationPlugin extends Plugin {
               db.load();
               return;
             }
+          }
+
+          // Watch for changes to any literature notes
+          if (
+            this.settings.syncNotesToDatabase &&
+            this.isLiteratureNote(file)
+          ) {
+            const dbFile = this.getDatabaseChild(file.parent.parent);
+            if (!dbFile) return;
+
+            const db = this.registry.peek(dbFile.path);
+            if (db && Array.from(db.notePaths.values()).includes(file.path)) {
+              const citekey = file.name.slice(1, -3); // @{{citekey}}.md
+              const entry = db.entries.get(citekey);
+              if (!entry) return;
+
+              const entryKeys = Object.keys(entry);
+
+              // Update entry in database
+              this.app.fileManager.processFrontMatter(file, (obj) => {
+                let count = 0;
+                for (const [key, value] of Object.entries(obj)) {
+                  if (entryKeys.includes(key)) {
+                    entry[key] = value;
+                    count++;
+                  }
+                }
+
+                if (count > 0) {
+                  db.entries.set(citekey, entry);
+                  db.save();
+                }
+              });
+            }
+            return;
           }
         }),
       );

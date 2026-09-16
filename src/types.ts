@@ -149,11 +149,10 @@ function parseRisFileLink(
 
 function getCSLMetadata(citekey: string, data: EntryDataCSL): EntryMetadata {
   const authors = data.author
-    ? data.author
-      .map((a) => {
-        if (a.literal) return a.literal;
-        return [a.given, a.family].filter(Boolean).join(' ');
-      })
+    ? data.author.map((a) => {
+      if (a.literal) return a.literal;
+      return [a.given, a.family].filter(Boolean).join(' ');
+    })
     : undefined;
 
   // CSL issued date-parts
@@ -204,11 +203,10 @@ function getBibLaTeXMetadata(
 
   // Author string from CSL authors (parsed into {given, family} by Citation.js)
   const authors = data.author
-    ? data.author
-      .map((a) => {
-        if (a.literal) return a.literal;
-        return [a.given, a.family].filter(Boolean).join(' ');
-      })
+    ? data.author.map((a) => {
+      if (a.literal) return a.literal;
+      return [a.given, a.family].filter(Boolean).join(' ');
+    })
     : undefined;
 
   // Container title: prefer CSL, fall back to raw BibLaTeX fields, then
