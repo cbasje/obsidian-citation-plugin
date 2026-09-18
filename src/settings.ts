@@ -1,9 +1,11 @@
 import {
+  AbstractInputSuggest,
   AbstractTextComponent,
   App,
   DropdownComponent,
   PluginSettingTab,
   Setting,
+  TFile,
 } from 'obsidian';
 import CitationPlugin from './main';
 import { type IIndexable, TEMPLATE_VARIABLES } from './types';
@@ -13,6 +15,30 @@ import {
   type CSL_LANG,
   type CSL_STYLE_ID,
 } from './csl/assets';
+
+export class CSLFileSuggest extends AbstractInputSuggest<string> {
+  /** All discovered file paths */
+  readonly paths = new Set<string>();
+
+  constructor(app: App, textInputEl: HTMLInputElement | HTMLDivElement) {
+    super(app, textInputEl);
+
+    const files = app.vault.getFiles();
+    for (const f of files) {
+      if (f instanceof TFile && f.extension.toLowerCase() === 'csl') {
+        this.paths.add(f.path);
+      }
+    }
+  }
+
+  protected getSuggestions(query: string): string[] | Promise<string[]> {
+    return Array.from(this.paths).filter((p) => p.includes(query));
+  }
+
+  renderSuggestion(value: string, el: HTMLElement): void {
+    el.createSpan(value);
+  }
+}
 
 export class CitationsPluginSettings {
   public citationExportPath: string = '';
@@ -250,6 +276,24 @@ export class CitationSettingTab extends PluginSettingTab {
         'line.',
     });
 
+    const cslFileInstructionsEl = containerEl.createEl('p');
+    cslFileInstructionsEl.append(
+      createSpan({
+        text: 'You can download custom .csl files from this repository: ',
+      }),
+    );
+    cslFileInstructionsEl.append(
+      createEl('a', {
+        text: 'github.com/citation-style-language/styles',
+        href: 'https://github.com/citation-style-language/styles',
+      }),
+    );
+    cslFileInstructionsEl.append(
+      createSpan({
+        text: '.',
+      }),
+    );
+
     new Setting(containerEl)
       .setName('CSL style')
       .setDesc('Citation style used for bibliography rendering.')
@@ -263,12 +307,14 @@ export class CitationSettingTab extends PluginSettingTab {
         'Optional path (relative to vault root) to a custom .csl file. ' +
         'Overrides the style dropdown when set.',
       )
-      .addText((input) =>
-        this.buildValueInput(input, 'customCslStylePath', (value) => {
+      .addSearch((search) => {
+        this.buildValueInput(search, 'customCslStylePath', (value) => {
           this.plugin.settings.cslStyle = 'custom';
           this.plugin.registry.main.addCustomCitationStyle(value);
-        }),
-      );
+        });
+        const suggest = new CSLFileSuggest(this.plugin.app, search.inputEl);
+        search.setDisabled(suggest.paths.size === 0);
+      });
 
     new Setting(containerEl)
       .setName('CSL language')
