@@ -150,12 +150,15 @@ export class CitationSettingTab extends PluginSettingTab {
           },
         ),
       )
-      .addButton((button) =>
-        button.setButtonText('(Re)load database').onClick(() => {
-          this.plugin
-            .loadDatabase()
-            .then(() => this.showCitationExportPathSuccess());
-        }),
+      .addExtraButton((button) =>
+        button
+          .setIcon('refresh-ccw')
+          .setTooltip('(Re)load database')
+          .onClick(() => {
+            this.plugin
+              .loadDatabase()
+              .then(() => this.showCitationExportPathSuccess());
+          }),
       );
 
     this.citationPathLoadingEl = containerEl.createEl('p', {
@@ -172,6 +175,7 @@ export class CitationSettingTab extends PluginSettingTab {
     });
 
     containerEl.createEl('h3', { text: 'Template settings' });
+
     const templateInstructionsEl = containerEl.createEl('p');
     templateInstructionsEl.append(
       createSpan({
@@ -211,22 +215,6 @@ export class CitationSettingTab extends PluginSettingTab {
         text: description ? ` — ${description}` : '',
       });
     });
-
-    const templateEntryInstructionsEl = containerEl.createEl('p');
-    templateEntryInstructionsEl.append(
-      createSpan({ text: 'Advanced users may also refer to the ' }),
-      createSpan({ text: '{{entry}}', cls: 'text-monospace' }),
-      createSpan({
-        text:
-          ' variable, which contains the full object representation of the ' +
-          'reference as used internally by the plugin. See the ',
-      }),
-      createEl('a', {
-        text: 'plugin documentation',
-        href: 'http://www.foldl.me/obsidian-citation-plugin/classes/entry.html',
-      }),
-      createSpan({ text: " for information on this object's structure." }),
-    );
 
     containerEl.createEl('h3', { text: 'Literature notes' });
 

@@ -11,6 +11,7 @@ export default tseslint.config(
       'main.js',
       'docs/**',
       'node_modules/**',
+      '.delta/**',
     ],
   },
   js.configs.recommended,
