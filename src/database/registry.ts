@@ -100,6 +100,24 @@ export class DatabaseRegistry {
   }
 
   /**
+   * Get-or-create the `CitationDatabase` instance for `path` without
+   * refcounting. The instance stays cached for the plugin's lifetime
+   * (like the main database). Returns undefined when no file exists at
+   * `path`.
+   */
+  hold(path: string): CitationDatabase | undefined {
+    const key = normalizePath(path);
+    let db = this.dbs.get(key);
+    if (!db) {
+      const file = this.plugin.app.vault.getFileByPath(key);
+      if (!file) return undefined;
+      db = new CitationDatabase(file, this.plugin);
+      this.dbs.set(key, db);
+    }
+    return db;
+  }
+
+  /**
    * Peek at the instance for `path` without changing the refcount.
    */
   peek(path: string): CitationDatabase | undefined {

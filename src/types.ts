@@ -6,7 +6,6 @@ export interface IIndexable {
 export const fileTypes = ['bib', 'json', 'ris'] as const;
 export type FileType = (typeof fileTypes)[number];
 
-export const CIT_VIEW_TYPE = 'citation-manager';
 export const CIT_ICON = 'quote';
 
 export const TEMPLATE_VARIABLES = {

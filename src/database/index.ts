@@ -360,9 +360,7 @@ export class CitationDatabase {
         : (cslConfig.templates.get(style) ?? cslConfig.templates.get('apa'));
 
     if (!styleXml) {
-      throw new Error(
-        `Unknown citation style: ${this.plugin?.settings.cslStyle}`,
-      );
+      throw new Error(`Unknown citation style: ${style}`);
     }
 
     const lang = opts?.language || this.plugin?.settings.cslLanguage || 'en-US';

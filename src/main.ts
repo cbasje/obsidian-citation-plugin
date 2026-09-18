@@ -12,14 +12,15 @@ import CitationEvents from './events';
 import { renderTemplate } from './templates';
 import { InsertCitationModal, OpenNoteModal } from './modals';
 import { CitationSettingTab, CitationsPluginSettings } from './settings';
-import { fileTypes, type IIndexable, CIT_VIEW_TYPE, CIT_ICON } from './types';
+import { type IIndexable, CIT_ICON } from './types';
 import type { CitationItem } from 'citeproc';
-import { EditorView } from './editor/editor-view';
 import { buildInlineCitationExtension } from './citations/extension';
 import { parseCitationGroup } from './citations/parse';
 import { StatusBarCounter } from './status-bar';
 import { DatabaseRegistry } from './database';
 import { ReferencesBlockView } from './references/references';
+import { registerCommands } from './commands';
+import { registerFileMenu } from './commands/context-menu';
 
 export function getMarkdownCitationForCitekey(citekey: string): string {
   return `[@${citekey}]`;
@@ -92,7 +93,7 @@ export default class CitationPlugin extends Plugin {
   }
 
   async onload(): Promise<void> {
-    console.debug(`Loading ${CIT_VIEW_TYPE} plugin`);
+    console.debug('Loading citation manager plugin');
 
     await this.loadSettings();
 
@@ -148,7 +149,8 @@ export default class CitationPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on('modify', (file) => {
           // Reload any registry-managed database whose file changed
-          // (covers both the main db and editor-opened databases).
+          // (covers the main db and databases targeted via the
+          // literature notes folder context menu).
           if (DatabaseRegistry.isPotentialDatabase(file)) {
             const db = this.registry.peek(file.path);
             if (db) {
@@ -209,63 +211,13 @@ export default class CitationPlugin extends Plugin {
       );
     }
 
-    // Customize the file menu
-    this.registerEvent(
-      this.app.workspace.on('file-menu', (menu, file, source, leaf) => {
-        if (source === 'link-context-menu') return;
+    // Citation actions on folders (new database, add/import references on
+    // the literature notes folder) and palette commands.
+    registerFileMenu(this);
+    registerCommands(this);
 
-        // Add a menu item to the folder context menu to create a board
-        if (file instanceof TFolder) {
-          menu.addItem((item) => {
-            item
-              .setSection('action-primary')
-              .setTitle('New citation database')
-              .setIcon(CIT_ICON)
-              .onClick(() => this.newDatabaseFile(file));
-          });
-          return;
-        }
-      }),
-    );
-
-    this.addRibbonIcon(CIT_ICON, 'Create new citation database', () => {
+    this.addRibbonIcon(CIT_ICON, 'Create new empty citation database', () => {
       this.newDatabaseFile();
-    });
-
-    this.addCommand({
-      id: 'open-literature-note',
-      name: 'Open literature note',
-      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'o' }],
-      callback: () => {
-        const modal = new OpenNoteModal(this.app, this);
-        modal.open();
-      },
-    });
-
-    this.addCommand({
-      id: 'update-bib-data',
-      name: 'Refresh citation database',
-      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'r' }],
-      callback: () => {
-        this.loadDatabase();
-      },
-    });
-
-    this.addCommand({
-      id: 'insert-markdown-citation',
-      name: 'Insert citation',
-      callback: () => {
-        const modal = new InsertCitationModal(this.app, this);
-        modal.open();
-      },
-    });
-
-    this.addCommand({
-      id: 'insert-references-block',
-      name: 'Insert references block',
-      callback: () => {
-        ReferencesBlockView.insert(this.editor);
-      },
     });
 
     // Render bibliographies dynamically in reading view / live preview.
@@ -285,9 +237,6 @@ export default class CitationPlugin extends Plugin {
     });
 
     this.addSettingTab(new CitationSettingTab(this.app, this));
-
-    this.registerExtensions(fileTypes as unknown as string[], CIT_VIEW_TYPE);
-    this.registerView(CIT_VIEW_TYPE, (leaf) => new EditorView(leaf, this));
   }
 
   async onunload(): Promise<void> {
@@ -309,11 +258,6 @@ export default class CitationPlugin extends Plugin {
       const targetPath = targetFolder.path + '/Untitled.bib';
       const createdFile = await this.app.vault.create(targetPath, '');
       this.registry.add(createdFile);
-
-      await this.app.workspace.getLeaf().setViewState({
-        type: CIT_VIEW_TYPE,
-        state: { file: createdFile.path },
-      });
     } catch (e) {
       console.error('Error creating new citation database:', e);
     }

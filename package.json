@@ -53,7 +53,6 @@
     "@citation-js/plugin-orcid": "^0.3.1",
     "@citation-js/plugin-pubmed": "^0.3.0",
     "@citation-js/plugin-ris": "^0.6.9",
-    "@lucide/svelte": "^1.35.0",
     "citeproc": "^2.4.63",
     "defuddle": "^0.19.3",
     "knap": "^0.4.1",

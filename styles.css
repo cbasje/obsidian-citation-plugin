@@ -122,15 +122,6 @@
   resize: vertical;
 }
 
-/** Citation manager: editor view **/
-
-/* The file input is clicked programmatically by a toolbar button and must
-   never render. Global (unscoped) so it applies regardless of Svelte's
-   scoped style injection. */
-.citation-manager .import-file-input {
-  display: none !important;
-}
-
 /** CSL inline citations (rendered in reading view) **/
 
 .csl-inline .csl-block {
